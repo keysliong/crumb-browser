@@ -6,9 +6,8 @@ import QtQuick.Layouts
 import Crumb
 import Crumb.Ui
 
-Popup {
+CookiePopup {
     id: dp
-    popupType: Popup.Window
     width: 400
     height: Math.min(560, header.implicitHeight + (Downloads.count === 0 ? 170 : Math.min(list.contentHeight, 440)) + 34)
     padding: 12
@@ -85,6 +84,19 @@ Popup {
             model: Downloads
             boundsBehavior: Flickable.StopAtBounds
             ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+            add: Transition {
+                ParallelAnimation {
+                    NumberAnimation { property: "opacity"; from: 0; to: 1; duration: Prefs.dur(220) }
+                    NumberAnimation { property: "x"; from: 24; to: 0; duration: Prefs.dur(320); easing.type: Easing.OutCubic }
+                }
+            }
+            remove: Transition {
+                ParallelAnimation {
+                    NumberAnimation { property: "opacity"; to: 0; duration: Prefs.dur(180) }
+                    NumberAnimation { property: "x"; to: -40; duration: Prefs.dur(200); easing.type: Easing.InCubic }
+                }
+            }
+            displaced: Transition { NumberAnimation { properties: "y"; duration: Prefs.dur(260); easing.type: Easing.OutCubic } }
 
             delegate: Rectangle {
                 id: row

@@ -547,7 +547,16 @@ Window {
                     required property int groupId
 
                     anchors.fill: parent
-                    visible: index === win.currentIndex
+                    readonly property bool current: index === win.currentIndex
+                    visible: current
+                    onCurrentChanged: if (current && !isWeb && Prefs.animations) pageEnter.restart()
+                    onKindChanged: if (current && !isWeb && Prefs.animations) pageEnter.restart()
+                    transformOrigin: Item.Top
+                    ParallelAnimation {
+                        id: pageEnter
+                        NumberAnimation { target: pageItem; property: "opacity"; from: 0; to: 1; duration: Prefs.dur(200); easing.type: Easing.OutQuad }
+                        NumberAnimation { target: pageItem; property: "scale"; from: 0.975; to: 1; duration: Prefs.dur(340); easing.type: Easing.OutCubic }
+                    }
 
                     readonly property var view: webLoader.item
                     readonly property bool isWeb: kind === "web"
@@ -673,6 +682,38 @@ Window {
         }
         readonly property var p: win.currentPage
         Component.onCompleted: if (buttonId === "downloads") win.downloadsButton = tbb
+        // «Подпрыгнуть» — началась или закончилась загрузка; «покачаться» — сработала подписка Rewind
+        function bounce() { if (Prefs.animations) bounceAnim.restart() }
+        function wiggle() { if (Prefs.animations) wiggleAnim.restart() }
+        transform: Translate { id: hop; y: 0 }
+        SequentialAnimation {
+            id: bounceAnim
+            NumberAnimation { target: hop; property: "y"; to: -9; duration: Prefs.dur(140); easing.type: Easing.OutQuad }
+            NumberAnimation { target: hop; property: "y"; to: 0; duration: Prefs.dur(520); easing.type: Easing.OutBounce }
+        }
+        SequentialAnimation {
+            id: wiggleAnim
+            loops: 2
+            RotationAnimation { target: tbb; to: 14; duration: Prefs.dur(90) }
+            RotationAnimation { target: tbb; to: -14; duration: Prefs.dur(160) }
+            RotationAnimation { target: tbb; to: 0; duration: Prefs.dur(90) }
+        }
+        property int lastActive: 0
+        Connections {
+            target: Downloads
+            enabled: tbb.buttonId === "downloads"
+            function onRowsInserted() { tbb.bounce() }
+            function onStatsChanged() {
+                if (Downloads.activeCount < tbb.lastActive) tbb.bounce()   // что-то докачалось
+                tbb.lastActive = Downloads.activeCount
+            }
+        }
+        Connections {
+            target: Rewind
+            enabled: tbb.buttonId === "rewind"
+            function onWatchTriggered() { tbb.wiggle() }
+            function onWatchAdded() { tbb.bounce() }
+        }
         Component.onDestruction: if (win.downloadsButton === tbb) win.downloadsButton = null
         size: win.compact ? 32 : 40
         icon: ({ back: "\uE72B", forward: "\uE72A", home: "\uE80F", newTab: "\uE710", theme: "\uE790", settings: "\uE713",
@@ -751,9 +792,8 @@ Window {
     }
 
     // «Банка с печеньем»: все включённые расширения, закрепление на панели.
-    Popup {
+    CookiePopup {
         id: extMenu
-        popupType: Popup.Window
         width: 320
         padding: 10
         background: Rectangle { color: Theme.surfaceContainer; radius: 22; border.color: Theme.outlineVariant }
@@ -889,7 +929,8 @@ Window {
         color: Theme.inverseSurface
         opacity: 0
         visible: opacity > 0
-        Behavior on opacity { NumberAnimation { duration: 200 } }
+        transform: Translate { y: (1 - toast.opacity) * 24 }
+        Behavior on opacity { NumberAnimation { duration: Prefs.dur(260); easing.type: Easing.OutCubic } }
         CText { id: toastText; anchors.centerIn: parent; width: Math.min(implicitWidth, parent.width - 40); elide: Text.ElideRight; color: Theme.inverseOnSurface; size: 14 }
         Timer { id: toastTimer; interval: 3500; onTriggered: toast.opacity = 0 }
     }
@@ -955,9 +996,9 @@ Window {
     }
 
     // Переименование группы — маленькое окно поверх полосы вкладок.
-    Popup {
+    CookiePopup {
         id: renamePopup
-        popupType: Popup.Window
+        transformOrigin: Popup.TopLeft
         property int gid: -1
         x: 40
         y: titleBar.height + 4

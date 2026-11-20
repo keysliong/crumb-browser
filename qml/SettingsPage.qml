@@ -340,13 +340,22 @@ Item {
                             text: modelData.title
                             checked: page.currentSection === index
                             variant: "surface"
-                            onClicked: if (target) flick.contentY = Math.min(target.y, flick.contentHeight - flick.height)
+                            onClicked: if (target) page.scrollTo(Math.min(target.y, flick.contentHeight - flick.height))
                         }
                     }
                 }
             }
         }
     }
+
+    // Плавная прокрутка к разделу (при выключенных анимациях — сразу)
+    function scrollTo(y) {
+        scrollAnim.stop()
+        if (!Prefs.animations) { flick.contentY = y; return }
+        scrollAnim.to = Math.max(0, y)
+        scrollAnim.start()
+    }
+    NumberAnimation { id: scrollAnim; target: flick; property: "contentY"; duration: Prefs.dur(520); easing.type: Easing.OutCubic }
 
     property int currentSection: {
         let cur = 0

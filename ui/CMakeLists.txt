@@ -20,6 +20,7 @@ qt_add_qml_module(crumb_ui
     qml/ThemedMenuSeparator.qml
     qml/CText.qml
     qml/CookieSlider.qml
+    qml/CookiePopup.qml
 )
 
 qt_add_resources(crumb_ui "crumb_ui_fonts"

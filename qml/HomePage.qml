@@ -142,6 +142,15 @@ Item {
             x: (flick.width - width) / 2
             y: Math.max(40, (flick.height - implicitHeight) / 2 - 40)
             spacing: 14
+            // Появление страницы: выплывает снизу
+            opacity: Prefs.animations ? 0 : 1
+            transform: Translate { id: rise; y: Prefs.animations ? 28 : 0 }
+            Component.onCompleted: if (Prefs.animations) homeEnter.start()
+            ParallelAnimation {
+                id: homeEnter
+                NumberAnimation { target: column; property: "opacity"; to: 1; duration: Prefs.dur(380); easing.type: Easing.OutQuad }
+                NumberAnimation { target: rise; property: "y"; to: 0; duration: Prefs.dur(560); easing.type: Easing.OutCubic }
+            }
 
             // ---- часы и приветствие
             ColumnLayout {
@@ -319,6 +328,18 @@ Item {
                             id: tileItem
                             width: parent.width
                             height: parent.height
+                            // Плитки появляются волной, одна за другой
+                            opacity: Prefs.animations ? 0 : 1
+                            scale: Prefs.animations ? 0.6 : 1
+                            Component.onCompleted: if (Prefs.animations) tileEnter.start()
+                            SequentialAnimation {
+                                id: tileEnter
+                                PauseAnimation { duration: Prefs.dur(160 + cell.index * 45) }
+                                ParallelAnimation {
+                                    NumberAnimation { target: tileItem; property: "opacity"; to: 1; duration: Prefs.dur(220) }
+                                    NumberAnimation { target: tileItem; property: "scale"; to: 1; duration: Prefs.dur(460); easing.type: Easing.OutBack; easing.overshoot: 1.6 }
+                                }
+                            }
                             // В режиме редактирования значки «покачиваются», как на телефоне.
                             rotation: home.editMode && Prefs.animations ? wobble.angle : 0
                             QtObject { id: wobble; property real angle: 0 }

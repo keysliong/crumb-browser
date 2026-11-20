@@ -9,6 +9,15 @@ Menu {
     id: menu
     popupType: Popup.Window
     padding: 6
+    // Меню раскрывается от точки нажатия с пружиной
+    transformOrigin: Popup.TopLeft
+    enter: Transition {
+        ParallelAnimation {
+            NumberAnimation { property: "opacity"; from: 0; to: 1; duration: Prefs.dur(120) }
+            NumberAnimation { property: "scale"; from: 0.9; to: 1; duration: Prefs.dur(260); easing.type: Easing.OutBack }
+        }
+    }
+    exit: Transition { NumberAnimation { property: "opacity"; from: 1; to: 0; duration: Prefs.dur(100) } }
 
     background: Rectangle {
         implicitWidth: 240

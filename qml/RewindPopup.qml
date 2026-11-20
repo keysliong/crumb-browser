@@ -6,9 +6,8 @@ import QtQuick.Layouts
 import Crumb
 import Crumb.Ui
 
-Popup {
+CookiePopup {
     id: rw
-    popupType: Popup.Window
     width: 600
     height: Math.min(640, col.implicitHeight + 28)
     padding: 14
