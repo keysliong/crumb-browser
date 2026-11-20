@@ -47,12 +47,12 @@
 }
 
 * { box-sizing: border-box; }
-html { scroll-behavior: smooth; }
+html { scroll-behavior: smooth; overflow-x: clip; }
 body {
   margin: 0; background: var(--surface); color: var(--on-surface);
   font-family: "Roboto Flex", system-ui, sans-serif; font-size: 17px; line-height: 1.5;
   transition: background .6s var(--ease), color .6s var(--ease);
-  overflow-x: hidden;
+  overflow-x: clip;
 }
 a { color: inherit; }
 .ico { font-family: "Material Symbols Rounded"; font-weight: normal; font-style: normal; line-height: 1;
@@ -91,8 +91,8 @@ header.top .wrap { display: flex; align-items: center; gap: 12px; height: 68px; 
   background: var(--surface-container); color: var(--on-surface-variant); font-size: 14px; font-weight: 500; text-decoration: none; }
 .chip .dot { width: 22px; height: 22px; --c-bg: var(--primary); --c-fg: var(--on-primary); font-size: 14px; }
 .chip .dot .ico { font-size: 14px; }
-h1 { font-size: clamp(40px, 7.4vw, 84px); line-height: 1.02; letter-spacing: -.035em; margin: 22px auto 18px; max-width: 900px;
-  font-weight: 800; font-variation-settings: "opsz" 144; }
+h1 { font-size: clamp(40px, 7.4vw, 84px); line-height: 1.04; letter-spacing: -.025em; margin: 22px auto 18px; max-width: 900px;
+  font-weight: 760; font-variation-settings: "opsz" 144; }
 h1 em { font-style: normal; color: var(--primary); transition: color .6s var(--ease); }
 .lead { font-size: clamp(17px, 2.2vw, 21px); color: var(--on-surface-variant); max-width: 640px; margin: 0 auto 34px; }
 .cta { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 22px; }
