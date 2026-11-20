@@ -1,0 +1,446 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Crumb — браузер</title>
+<meta name="description" content="Crumb — браузер на Chromium в стиле Material You. Цвета из обоев, кнопки-печеньки, Rewind, свои пароли и история.">
+<meta name="theme-color" content="#6750a4">
+<link rel="icon" href="icon.png">
+<meta property="og:title" content="Crumb — браузер в стиле Material You">
+<meta property="og:description" content="Chromium, который подстраивается под ваши обои. Бесплатно для Windows.">
+<meta property="og:image" content="icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto+Flex:opsz,wght@8..144,300..900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,1,0&display=swap" rel="stylesheet">
+<style>
+/* Цвета Material You. Значения ниже — запасные (фиолетовая схема); скрипт пересчитывает
+   их из выбранного «цвета обоев» через material-color-utilities. */
+:root {
+  --primary: #6750a4; --on-primary: #fff; --primary-container: #eaddff; --on-primary-container: #21005d;
+  --secondary-container: #e8def8; --on-secondary-container: #1d192b;
+  --tertiary-container: #ffd8e4; --on-tertiary-container: #31111d;
+  --surface: #fef7ff; --surface-low: #f7f2fa; --surface-container: #f3edf7; --surface-high: #ece6f0; --surface-highest: #e6e0e9;
+  --on-surface: #1d1b20; --on-surface-variant: #49454f; --outline-variant: #cac4d0; --inverse-surface: #322f35; --inverse-on-surface: #f5eff7;
+  --ease: cubic-bezier(.2, 0, 0, 1);
+  --spring: cubic-bezier(.34, 1.56, .64, 1);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --primary: #d0bcff; --on-primary: #381e72; --primary-container: #4f378b; --on-primary-container: #eaddff;
+    --secondary-container: #4a4458; --on-secondary-container: #e8def8;
+    --tertiary-container: #633b48; --on-tertiary-container: #ffd8e4;
+    --surface: #141218; --surface-low: #1d1b20; --surface-container: #211f26; --surface-high: #2b2930; --surface-highest: #36343b;
+    --on-surface: #e6e0e9; --on-surface-variant: #cac4d0; --outline-variant: #49454f; --inverse-surface: #e6e0e9; --inverse-on-surface: #322f35;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --primary: #d0bcff; --on-primary: #381e72; --primary-container: #4f378b; --on-primary-container: #eaddff;
+  --secondary-container: #4a4458; --on-secondary-container: #e8def8;
+  --tertiary-container: #633b48; --on-tertiary-container: #ffd8e4;
+  --surface: #141218; --surface-low: #1d1b20; --surface-container: #211f26; --surface-high: #2b2930; --surface-highest: #36343b;
+  --on-surface: #e6e0e9; --on-surface-variant: #cac4d0; --outline-variant: #49454f; --inverse-surface: #e6e0e9; --inverse-on-surface: #322f35;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0; background: var(--surface); color: var(--on-surface);
+  font-family: "Roboto Flex", system-ui, sans-serif; font-size: 17px; line-height: 1.5;
+  transition: background .6s var(--ease), color .6s var(--ease);
+  overflow-x: hidden;
+}
+a { color: inherit; }
+.ico { font-family: "Material Symbols Rounded"; font-weight: normal; font-style: normal; line-height: 1;
+  font-size: 24px; display: inline-block; -webkit-font-feature-settings: "liga"; font-feature-settings: "liga"; user-select: none; }
+.wrap { max-width: 1160px; margin: 0 auto; padding: 0 16px; }
+@media (min-width: 700px) { .wrap { padding: 0 32px; } }
+
+/* ---- печенька: форма через clipPath, вращается при наведении, содержимое стоит */
+.cookie { position: relative; display: inline-grid; place-items: center; isolation: isolate; border: 0; background: none;
+  color: var(--c-fg, var(--on-secondary-container)); cursor: pointer; padding: 0; font: inherit; text-decoration: none; }
+.cookie::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--c-bg, var(--secondary-container));
+  clip-path: url(#cookie12); transition: transform .9s var(--spring), background .6s var(--ease); }
+.cookie:hover::before { transform: rotate(45deg) scale(1.06); }
+.cookie:active::before { transform: rotate(60deg) scale(.92); transition-duration: .2s; }
+.cookie.soft::before { clip-path: url(#cookie9); }
+.spin::before { animation: spin 24s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ---- шапка */
+header.top { position: sticky; top: 0; z-index: 10; backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+  background: color-mix(in srgb, var(--surface) 82%, transparent); transition: background .6s var(--ease); }
+header.top .wrap { display: flex; align-items: center; gap: 12px; height: 68px; }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 20px; text-decoration: none; }
+.brand img { width: 34px; height: 34px; }
+.nav { margin-left: auto; display: flex; align-items: center; gap: 4px; }
+.nav a.link { text-decoration: none; padding: 8px 14px; border-radius: 20px; font-weight: 500; font-size: 15px; color: var(--on-surface-variant); }
+.nav a.link:hover { background: var(--surface-high); color: var(--on-surface); }
+.icon-btn { width: 42px; height: 42px; --c-bg: var(--surface-high); --c-fg: var(--on-surface-variant); }
+@media (max-width: 640px) { .nav a.link.hide-s { display: none; } }
+
+/* ---- главный экран */
+.hero { padding: 48px 0 24px; text-align: center; position: relative; }
+.blob { position: absolute; z-index: -1; opacity: .55; filter: blur(2px); }
+.blob::before { background: var(--c-bg); }
+.chip { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px 6px 8px; border-radius: 20px;
+  background: var(--surface-container); color: var(--on-surface-variant); font-size: 14px; font-weight: 500; text-decoration: none; }
+.chip .dot { width: 22px; height: 22px; --c-bg: var(--primary); --c-fg: var(--on-primary); font-size: 14px; }
+.chip .dot .ico { font-size: 14px; }
+h1 { font-size: clamp(40px, 7.4vw, 84px); line-height: 1.02; letter-spacing: -.035em; margin: 22px auto 18px; max-width: 900px;
+  font-weight: 800; font-variation-settings: "opsz" 144; }
+h1 em { font-style: normal; color: var(--primary); transition: color .6s var(--ease); }
+.lead { font-size: clamp(17px, 2.2vw, 21px); color: var(--on-surface-variant); max-width: 640px; margin: 0 auto 34px; }
+.cta { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 22px; }
+.download { display: inline-flex; align-items: center; gap: 14px; text-decoration: none; color: var(--on-surface); font-weight: 600; font-size: 18px; text-align: left; }
+.download .cookie { width: 84px; height: 84px; --c-bg: var(--primary); --c-fg: var(--on-primary); }
+.download .cookie .ico { font-size: 34px; transition: transform .5s var(--spring); }
+.download:hover .cookie .ico { transform: translateY(4px); }
+.download small { display: block; font-weight: 400; font-size: 14px; color: var(--on-surface-variant); }
+.ghost { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; font-weight: 500; color: var(--on-surface); }
+.ghost .cookie { width: 52px; height: 52px; }
+
+/* ---- цвета обоев */
+.palette { margin: 40px auto 0; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.palette p { margin: 0; font-size: 14px; color: var(--on-surface-variant); }
+.swatches { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+.swatch { width: 44px; height: 44px; --c-bg: var(--sw); --c-fg: #fff; }
+.swatch .ico { font-size: 20px; opacity: 0; transform: scale(.4); transition: .4s var(--spring); }
+.swatch[aria-pressed="true"] .ico { opacity: 1; transform: none; }
+.swatch[aria-pressed="true"]::before { transform: rotate(30deg) scale(1.12); }
+
+/* ---- окно браузера (рисунок) */
+.mock { margin: 46px auto 0; max-width: 1040px; border-radius: 26px; background: var(--surface-container); padding: 8px;
+  box-shadow: 0 30px 80px -30px color-mix(in srgb, var(--primary) 45%, transparent); transition: background .6s var(--ease), box-shadow .6s var(--ease);
+  text-align: left; transform: perspective(1600px) rotateX(8deg); transform-origin: top; animation: rise 1.2s var(--ease) .2s both; }
+@keyframes rise { from { opacity: 0; transform: perspective(1600px) rotateX(18deg) translateY(40px); } }
+.m-tabs { display: flex; align-items: center; gap: 4px; height: 38px; padding: 0 6px; }
+.m-tab { display: flex; align-items: center; gap: 8px; padding: 0 12px; height: 32px; border-radius: 12px; font-size: 13px;
+  color: var(--on-surface-variant); min-width: 0; flex: 0 1 190px; white-space: nowrap; overflow: hidden; }
+.m-tab.on { background: var(--surface); color: var(--on-surface); }
+.m-tab .fav { width: 16px; height: 16px; flex: none; }
+.m-plus { width: 26px; height: 26px; font-size: 16px; }
+.m-plus .ico { font-size: 16px; }
+.m-win { margin-left: auto; display: flex; gap: 6px; }
+.m-win span { width: 24px; height: 24px; --c-bg: var(--surface-highest); }
+.m-card { background: var(--surface); border-radius: 18px; overflow: hidden; transition: background .6s var(--ease); }
+.m-bar { display: flex; align-items: center; gap: 6px; padding: 9px 10px; }
+.m-btn { width: 34px; height: 34px; flex: none; }
+.m-btn .ico { font-size: 18px; }
+.m-btn.filled { --c-bg: var(--primary); --c-fg: var(--on-primary); }
+.m-addr { flex: 1; height: 38px; border-radius: 19px; background: var(--surface-high); display: flex; align-items: center; gap: 10px;
+  padding: 0 14px; font-size: 14px; color: var(--on-surface-variant); min-width: 0; margin: 0 4px; white-space: nowrap; overflow: hidden; }
+.m-addr .ico { font-size: 16px; }
+.m-home { height: 380px; position: relative; display: grid; place-items: center; overflow: hidden;
+  background: radial-gradient(120% 90% at 20% 10%, var(--primary-container), transparent 60%),
+              radial-gradient(90% 80% at 90% 90%, var(--tertiary-container), transparent 60%), var(--surface-low);
+  transition: background .6s var(--ease); }
+.m-home-in { text-align: center; width: min(560px, 90%); }
+.m-clock { font-size: clamp(52px, 9vw, 92px); font-weight: 300; letter-spacing: -.04em; line-height: 1; color: var(--on-surface); font-variation-settings: "opsz" 144; }
+.m-greet { color: var(--on-surface-variant); margin: 8px 0 18px; font-size: 15px; }
+.m-search { height: 48px; border-radius: 24px; background: var(--surface); display: flex; align-items: center; gap: 10px; padding: 0 18px;
+  color: var(--on-surface-variant); font-size: 15px; box-shadow: 0 6px 20px -10px rgba(0,0,0,.25); }
+.m-tiles { display: flex; justify-content: center; gap: 14px; margin-top: 22px; flex-wrap: wrap; }
+.m-tile { width: 52px; height: 52px; font-weight: 700; font-size: 18px; --c-bg: var(--surface-highest); --c-fg: var(--on-surface); }
+.m-tile:nth-child(2n) { --c-bg: var(--secondary-container); }
+.m-tile:nth-child(3n) { --c-bg: var(--primary-container); --c-fg: var(--on-primary-container); }
+@media (max-width: 640px) {
+  .m-tab:not(.on) { display: none; } .m-bar .hide-s { display: none; } .m-home { height: 300px; } .mock { transform: none; animation: none; }
+}
+
+/* ---- разделы */
+section { padding: 88px 0 0; }
+.kicker { font-size: 14px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--primary); margin: 0 0 10px; }
+h2 { font-size: clamp(30px, 4.6vw, 52px); line-height: 1.08; letter-spacing: -.025em; margin: 0 0 14px; font-weight: 750; max-width: 760px; }
+.sub { color: var(--on-surface-variant); font-size: 18px; max-width: 640px; margin: 0 0 40px; }
+
+.grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.card { background: var(--surface-container); border-radius: 28px; padding: 26px; transition: background .6s var(--ease), transform .5s var(--spring), border-radius .5s var(--spring); }
+.card:hover { transform: translateY(-4px); border-radius: 36px; background: var(--surface-high); }
+.card .cookie { width: 56px; height: 56px; margin-bottom: 18px; }
+.card:nth-child(3n+1) .cookie { --c-bg: var(--primary-container); --c-fg: var(--on-primary-container); }
+.card:nth-child(3n+2) .cookie { --c-bg: var(--secondary-container); --c-fg: var(--on-secondary-container); }
+.card:nth-child(3n) .cookie { --c-bg: var(--tertiary-container); --c-fg: var(--on-tertiary-container); }
+.card:hover .cookie::before { transform: rotate(45deg) scale(1.06); }
+.card h3 { margin: 0 0 6px; font-size: 20px; font-weight: 650; }
+.card p { margin: 0; color: var(--on-surface-variant); font-size: 15.5px; }
+.card.wide { grid-column: span 2; display: flex; gap: 22px; align-items: center; background: var(--primary-container); color: var(--on-primary-container); }
+.card.wide p { color: inherit; opacity: .85; }
+.card.wide .cookie { --c-bg: var(--primary) !important; --c-fg: var(--on-primary) !important; width: 92px; height: 92px; flex: none; margin: 0; }
+.card.wide .cookie .ico { font-size: 40px; }
+@media (max-width: 640px) { .card.wide { grid-column: auto; flex-direction: column; align-items: flex-start; } }
+
+/* ---- установка */
+.steps { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); counter-reset: s; }
+.step { position: relative; padding: 26px; border-radius: 28px; background: var(--surface-low); border: 1px solid var(--outline-variant); }
+.step .n { width: 46px; height: 46px; font-weight: 750; font-size: 18px; margin-bottom: 14px; --c-bg: var(--primary); --c-fg: var(--on-primary); }
+.step h3 { margin: 0 0 4px; font-size: 19px; }
+.step p { margin: 0; color: var(--on-surface-variant); font-size: 15.5px; }
+.note { margin-top: 14px; display: flex; gap: 12px; align-items: flex-start; padding: 16px 20px; border-radius: 20px;
+  background: var(--surface-container); color: var(--on-surface-variant); font-size: 15px; }
+.note .ico { color: var(--primary); }
+
+/* ---- финал */
+.final { margin: 88px 0 0; padding: 56px 24px; border-radius: 40px; text-align: center; background: var(--primary); color: var(--on-primary);
+  position: relative; overflow: hidden; transition: background .6s var(--ease); }
+.final h2 { margin: 0 auto 10px; }
+.final p { margin: 0 auto 28px; opacity: .85; max-width: 520px; }
+.final .download { color: var(--on-primary); }
+.final .download small { color: var(--on-primary); opacity: .8; }
+.final .download .cookie { --c-bg: var(--on-primary); --c-fg: var(--primary); }
+.final .deco { position: absolute; width: 220px; height: 220px; opacity: .14; --c-bg: var(--on-primary); }
+
+footer { padding: 40px 0 48px; color: var(--on-surface-variant); font-size: 14px; }
+footer .wrap { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; }
+footer a { color: var(--on-surface-variant); }
+
+/* появление при прокрутке */
+.reveal { opacity: 0; transform: translateY(24px); transition: opacity .8s var(--ease), transform .8s var(--ease); }
+.reveal.in { opacity: 1; transform: none; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before { animation: none !important; transition: none !important; }
+  .reveal { opacity: 1; transform: none; }
+}
+</style>
+</head>
+<body>
+<!-- Формы печенек (координаты 0…1, генерируются скриптом ниже) -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <clipPath id="cookie12" clipPathUnits="objectBoundingBox"><path id="p12"/></clipPath>
+    <clipPath id="cookie9" clipPathUnits="objectBoundingBox"><path id="p9"/></clipPath>
+  </defs>
+</svg>
+
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="#"><img src="icon.png" alt="">Crumb</a>
+    <nav class="nav">
+      <a class="link hide-s" href="#features">Возможности</a>
+      <a class="link hide-s" href="#install">Установка</a>
+      <a class="link" href="https://github.com/keysliong/crumb-browser">GitHub</a>
+      <button class="cookie icon-btn" id="themeBtn" aria-label="Светлая или тёмная тема"><span class="ico" id="themeIco">dark_mode</span></button>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="hero wrap">
+    <span class="cookie soft spin blob" style="width:260px;height:260px;left:-80px;top:40px;--c-bg:var(--primary-container)"></span>
+    <span class="cookie spin blob" style="width:180px;height:180px;right:-40px;top:220px;--c-bg:var(--tertiary-container);animation-direction:reverse"></span>
+
+    <a class="chip" href="https://github.com/keysliong/crumb-browser/releases/latest">
+      <span class="cookie dot"><span class="ico">new_releases</span></span>
+      <span id="verChip">Новое: пароли, история и поиск по странице</span>
+    </a>
+    <h1>Браузер, который <em>подстраивается</em> под ваши обои</h1>
+    <p class="lead">Crumb — это Chromium в стиле Material You. Цвета берутся из обоев, каждая кнопка — печенька, а страницы можно отмотать назад во времени.</p>
+
+    <div class="cta">
+      <a class="download" href="https://github.com/keysliong/crumb-browser/releases/latest/download/Crumb-Setup.exe">
+        <span class="cookie"><span class="ico">download</span></span>
+        <span>Скачать для Windows<small id="dlMeta">Бесплатно · Windows 10 и 11, 64 бит</small></span>
+      </a>
+      <a class="ghost" href="https://github.com/keysliong/crumb-browser">
+        <span class="cookie"><span class="ico">code</span></span>
+        Исходный код
+      </a>
+    </div>
+
+    <div class="palette">
+      <p>Попробуйте: выберите «обои» — сайт перекрасится, как Crumb</p>
+      <div class="swatches" id="swatches"></div>
+    </div>
+
+    <!-- Рисунок окна Crumb -->
+    <div class="mock" aria-hidden="true">
+      <div class="m-tabs">
+        <div class="m-tab on"><img class="fav" src="icon.png" alt="">Новая вкладка</div>
+        <div class="m-tab"><span class="ico" style="font-size:16px">music_note</span>Яндекс Музыка</div>
+        <div class="m-tab"><span class="ico" style="font-size:16px">history</span>История</div>
+        <span class="cookie m-plus"><span class="ico">add</span></span>
+        <div class="m-win"><span class="cookie"></span><span class="cookie"></span><span class="cookie"></span></div>
+      </div>
+      <div class="m-card">
+        <div class="m-bar">
+          <span class="cookie m-btn"><span class="ico">arrow_back</span></span>
+          <span class="cookie m-btn hide-s"><span class="ico">arrow_forward</span></span>
+          <span class="cookie m-btn"><span class="ico">refresh</span></span>
+          <div class="m-addr"><span class="ico">search</span>Введите адрес или запрос</div>
+          <span class="cookie m-btn hide-s"><span class="ico">extension</span></span>
+          <span class="cookie m-btn hide-s"><span class="ico">history</span></span>
+          <span class="cookie m-btn"><span class="ico">download</span></span>
+          <span class="cookie m-btn filled"><span class="ico">palette</span></span>
+        </div>
+        <div class="m-home">
+          <div class="m-home-in">
+            <div class="m-clock" id="clock">12:00</div>
+            <div class="m-greet" id="greet">Добрый день</div>
+            <div class="m-search"><span class="ico" style="font-size:20px">search</span>Поиск в интернете</div>
+            <div class="m-tiles">
+              <span class="cookie m-tile">Y</span><span class="cookie m-tile">W</span><span class="cookie m-tile">G</span>
+              <span class="cookie m-tile">M</span><span class="cookie m-tile">Я</span><span class="cookie m-tile">T</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <section id="features" class="wrap">
+    <p class="kicker reveal">Возможности</p>
+    <h2 class="reveal">Всё нужное — уже внутри</h2>
+    <p class="sub reveal">Никаких серых окон Chrome: история, пароли и загрузки нарисованы заново в стиле Material You.</p>
+    <div class="grid">
+      <div class="card wide reveal">
+        <span class="cookie soft"><span class="ico">fast_rewind</span></span>
+        <div><h3>Rewind — машина времени</h3>
+        <p>Crumb сохраняет снимки страниц. Откройте, как сайт выглядел вчера, посмотрите, что изменилось, следите за ценой или новостью — придёт уведомление. Ищите по всему, что когда-либо видели.</p></div>
+      </div>
+      <div class="card reveal"><span class="cookie"><span class="ico">palette</span></span><h3>Цвета из обоев</h3><p>Палитра Material You строится из ваших обоев Windows и меняется вместе с ними.</p></div>
+      <div class="card reveal"><span class="cookie"><span class="ico">key</span></span><h3>Свои пароли</h3><p>Предлагает сохранить пароль и подставляет его. Зашифровано Windows, показать — после Windows Hello.</p></div>
+      <div class="card reveal"><span class="cookie"><span class="ico">history</span></span><h3>История и подсказки</h3><p>Посещения по дням, поиск, подсказки прямо в адресной строке.</p></div>
+      <div class="card reveal"><span class="cookie"><span class="ico">tab_recent</span></span><h3>Вкладки вернутся</h3><p>После перезапуска или сбоя все вкладки и группы на месте. Сбоку или сверху — как удобно.</p></div>
+      <div class="card reveal"><span class="cookie"><span class="ico">music_note</span></span><h3>Яндекс Музыка и видео</h3><p>Кодеки AAC и H.264 включены — музыка и видео играют везде.</p></div>
+      <div class="card reveal"><span class="cookie"><span class="ico">extension</span></span><h3>Расширения Chrome</h3><p>Ставьте что угодно из Chrome Web Store — работает как в Chrome.</p></div>
+      <div class="card reveal"><span class="cookie"><span class="ico">sync</span></span><h3>Аккаунт через GitHub</h3><p>Настройки, домашняя страница и расширения на всех компьютерах. Зашифровано вашим паролем.</p></div>
+      <div class="card reveal"><span class="cookie"><span class="ico">find_in_page</span></span><h3>Поиск по странице</h3><p>Ctrl+F — «3 из 17», стрелки, учёт регистра.</p></div>
+      <div class="card reveal"><span class="cookie"><span class="ico">cookie</span></span><h3>Печеньки везде</h3><p>Каждая кнопка — печенька: крутится, пружинит, а форму и анимации можно настроить.</p></div>
+    </div>
+  </section>
+
+  <section id="install" class="wrap">
+    <p class="kicker reveal">Установка</p>
+    <h2 class="reveal">Три шага — и готово</h2>
+    <p class="sub reveal">Установщик сам обновит старую версию и сохранит все настройки.</p>
+    <div class="steps">
+      <div class="step reveal"><span class="cookie n">1</span><h3>Скачайте</h3><p>Файл Crumb-Setup.exe — около 170 МБ.</p></div>
+      <div class="step reveal"><span class="cookie n">2</span><h3>Запустите</h3><p>Нажмите «Установить». Права администратора не нужны.</p></div>
+      <div class="step reveal"><span class="cookie n">3</span><h3>Пользуйтесь</h3><p>Crumb предложит стать браузером по умолчанию — по желанию.</p></div>
+    </div>
+    <div class="note reveal"><span class="ico">shield</span>
+      <span>Установщик пока не подписан, поэтому Windows SmartScreen может предупредить. Нажмите «Подробнее» → «Выполнить в любом случае». Исходный код открыт на GitHub.</span></div>
+  </section>
+
+  <div class="wrap">
+    <div class="final reveal">
+      <span class="cookie spin deco" style="left:-60px;top:-60px"></span>
+      <span class="cookie soft spin deco" style="right:-70px;bottom:-80px;animation-direction:reverse"></span>
+      <h2>Попробуйте Crumb</h2>
+      <p>Бесплатно и с открытым кодом.</p>
+      <a class="download" href="https://github.com/keysliong/crumb-browser/releases/latest/download/Crumb-Setup.exe">
+        <span class="cookie"><span class="ico">download</span></span>
+        <span>Скачать для Windows<small id="dlMeta2">Windows 10 и 11, 64 бит</small></span>
+      </a>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>Crumb</span>
+    <a href="https://github.com/keysliong/crumb-browser">GitHub</a>
+    <a href="https://github.com/keysliong/crumb-browser/releases">Все версии</a>
+    <span>Сделано на Chromium (CEF) и Qt</span>
+  </div>
+</footer>
+
+<script>
+// ---- формы печенек: r(θ) = 1 + d·cos(nθ), в координатах 0…1
+function cookiePath(n, d) {
+  let s = "";
+  for (let i = 0; i <= 360; i++) {
+    const t = i / 360 * Math.PI * 2, r = 0.5 * (1 + d * Math.cos(n * t)) / (1 + d);
+    s += (i ? "L" : "M") + (0.5 + r * Math.cos(t)).toFixed(4) + " " + (0.5 + r * Math.sin(t)).toFixed(4);
+  }
+  return s + "Z";
+}
+document.getElementById("p12").setAttribute("d", cookiePath(12, 0.075));
+document.getElementById("p9").setAttribute("d", cookiePath(9, 0.06));
+
+// ---- светлая / тёмная тема (выбор запоминается в этом браузере)
+const root = document.documentElement;
+const media = matchMedia("(prefers-color-scheme: dark)");
+function stored() { try { return localStorage.getItem("crumb-theme"); } catch (e) { return null; } }
+function isDark() { return root.dataset.theme ? root.dataset.theme === "dark" : media.matches; }
+if (stored()) root.dataset.theme = stored();
+function syncIcon() { document.getElementById("themeIco").textContent = isDark() ? "light_mode" : "dark_mode"; }
+document.getElementById("themeBtn").addEventListener("click", () => {
+  root.dataset.theme = isDark() ? "light" : "dark";
+  try { localStorage.setItem("crumb-theme", root.dataset.theme); } catch (e) {}
+  syncIcon(); applyScheme();
+});
+media.addEventListener("change", () => { syncIcon(); applyScheme(); });
+syncIcon();
+
+// ---- «обои» → схема Material You
+const seeds = ["#6750a4", "#1b6c4a", "#b3261e", "#00639b", "#8b5000", "#984061", "#4a6267"];
+let seed = seeds[0], mcu = null;
+const box = document.getElementById("swatches");
+seeds.forEach((c, i) => {
+  const b = document.createElement("button");
+  b.className = "cookie swatch";
+  b.style.setProperty("--sw", c);
+  b.setAttribute("aria-label", "Цвет " + (i + 1));
+  b.setAttribute("aria-pressed", i === 0 ? "true" : "false");
+  b.innerHTML = '<span class="ico">check</span>';
+  b.addEventListener("click", () => {
+    box.querySelectorAll(".swatch").forEach(x => x.setAttribute("aria-pressed", "false"));
+    b.setAttribute("aria-pressed", "true");
+    seed = c; applyScheme();
+  });
+  box.appendChild(b);
+});
+function applyScheme() {
+  if (!mcu) return;
+  const { themeFromSourceColor, argbFromHex, hexFromArgb } = mcu;
+  const t = themeFromSourceColor(argbFromHex(seed));
+  const dark = isDark(), p = t.palettes, n = p.neutral, nv = p.neutralVariant;
+  const tone = (pal, l, d) => hexFromArgb(pal.tone(dark ? d : l));
+  const v = {
+    "--primary": tone(p.primary, 40, 80), "--on-primary": tone(p.primary, 100, 20),
+    "--primary-container": tone(p.primary, 90, 30), "--on-primary-container": tone(p.primary, 10, 90),
+    "--secondary-container": tone(p.secondary, 90, 30), "--on-secondary-container": tone(p.secondary, 10, 90),
+    "--tertiary-container": tone(p.tertiary, 90, 30), "--on-tertiary-container": tone(p.tertiary, 10, 90),
+    "--surface": tone(n, 98, 6), "--surface-low": tone(n, 96, 10), "--surface-container": tone(n, 94, 12),
+    "--surface-high": tone(n, 92, 17), "--surface-highest": tone(n, 90, 22),
+    "--on-surface": tone(n, 10, 90), "--on-surface-variant": tone(nv, 30, 80), "--outline-variant": tone(nv, 80, 30),
+  };
+  for (const k in v) root.style.setProperty(k, v[k]);
+  document.querySelector('meta[name="theme-color"]').content = v["--primary"];
+}
+import("https://cdn.jsdelivr.net/npm/@material/material-color-utilities@0.3.0/+esm")
+  .then(m => { mcu = m; applyScheme(); })
+  .catch(() => {});   // без сети к CDN остаётся фиолетовая схема из CSS
+
+// ---- часы и приветствие на рисунке
+function tick() {
+  const d = new Date(), h = d.getHours();
+  document.getElementById("clock").textContent = String(h).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
+  document.getElementById("greet").textContent = h < 5 ? "Доброй ночи" : h < 12 ? "Доброе утро" : h < 18 ? "Добрый день" : "Добрый вечер";
+}
+tick(); setInterval(tick, 10000);
+
+// ---- версия и размер последнего релиза с GitHub
+fetch("https://api.github.com/repos/keysliong/crumb-browser/releases/latest")
+  .then(r => r.ok ? r.json() : null)
+  .then(rel => {
+    if (!rel) return;
+    const a = (rel.assets || []).find(x => /Setup\.exe$/i.test(x.name));
+    const mb = a ? " · " + Math.round(a.size / 1048576) + " МБ" : "";
+    const ver = (rel.tag_name || "").replace(/^v/, "");
+    document.getElementById("dlMeta").textContent = "Версия " + ver + mb + " · Windows 10 и 11";
+    document.getElementById("dlMeta2").textContent = "Версия " + ver + mb;
+  })
+  .catch(() => {});
+
+// ---- появление блоков при прокрутке
+const io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); } }), { threshold: .12 });
+document.querySelectorAll(".reveal").forEach(el => io.observe(el));
+</script>
+</body>
+</html>
