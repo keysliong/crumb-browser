@@ -85,12 +85,6 @@ Item {
                     enabled: Extensions.ready
                     onClicked: Extensions.refresh()
                 }
-                CookieButton {
-                    icon: ""; variant: "surface"
-                    text: qsTr("chrome://extensions")
-                    toolTip: qsTr("Полная страница расширений Chromium")
-                    onClicked: page.openUrl("chrome://extensions/")
-                }
             }
 
             // Ошибка последней операции

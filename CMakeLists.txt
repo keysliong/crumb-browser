@@ -76,6 +76,7 @@ qt_add_executable(crumb WIN32
   src/downloads/DownloadManager.h   src/downloads/DownloadManager.cpp
   src/extensions/ExtensionManager.h src/extensions/ExtensionManager.cpp
   src/system/DefaultBrowser.h       src/system/DefaultBrowser.cpp
+  src/downloads/FileIconProvider.h  src/downloads/FileIconProvider.cpp
   src/rewind/RewindStore.h          src/rewind/RewindStore.cpp
   src/rewind/RewindManager.h        src/rewind/RewindManager.cpp
   src/sync/SyncCrypto.h             src/sync/SyncCrypto.cpp
@@ -100,7 +101,7 @@ qt_add_qml_module(crumb
     qml/Gradients.qml
     qml/DownloadsPage.qml
     qml/ExtensionsPage.qml
-    qml/ExtensionPopup.qml qml/RewindPopup.qml
+    qml/ExtensionPopup.qml qml/RewindPopup.qml qml/DownloadsPopup.qml
 )
 
 # Client ID OAuth-приложения GitHub для входа в аккаунт (Device Flow). Публичный, не секрет.

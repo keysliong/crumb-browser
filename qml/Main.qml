@@ -68,13 +68,21 @@ Window {
     // Открыть адрес новой вкладкой: crumb://… — внутренняя страница, остальное — сайт.
     function openUrl(u, index) {
         const t = String(u).trim()
-        if (internalPages[t]) openPage(internalPages[t])
+        if (internalKind(t)) openPage(internalKind(t))
         else if (t === "crumb://home" || t === "crumb://newtab" || t.startsWith("chrome://newtab")
                  || t.startsWith("chrome://new-tab-page")) newTab("home", "", index)
         else newTab("web", t, index)
     }
     readonly property var internalPages: ({ "crumb://settings": "settings", "crumb://downloads": "downloads",
                                             "crumb://extensions": "extensions" })
+    // Своя страница Crumb для адреса (в т.ч. chrome://extensions и chrome://downloads) или "".
+    function internalKind(u) {
+        const t = String(u).trim().toLowerCase().replace(/\/+$/, "")
+        if (internalPages[t]) return internalPages[t]
+        if (/^chrome:\/\/extensions([\/?#]|$)/.test(t)) return "extensions"
+        if (/^chrome:\/\/downloads([\/?#]|$)/.test(t)) return "downloads"
+        return ""
+    }
 
     // Нажатие на печеньку расширения: его всплывающее окно под кнопкой.
     function openExtension(ext, anchorItem) {
@@ -564,7 +572,7 @@ Window {
                     function navigate(text) {
                         const t = text.trim()
                         if (!t.length) return
-                        if (win.internalPages[t]) { win.openPage(win.internalPages[t]); return }
+                        if (win.internalKind(t)) { win.openPage(win.internalKind(t)); return }
                         if (t === "crumb://home" || t === "crumb://newtab") { setKind("home"); return }
                         const wasHome = kind === "home"
                         if (!webStarted) {
@@ -603,6 +611,12 @@ Window {
                             onChromeCommand: (id) => win.command(id, pageItem.index)
                             onShortcutTriggered: (name) => win.action(name, pageItem.index)
                             onPageClosed: win.closeTab(pageItem.index)
+                            onUrlChanged: {
+                                const k = win.internalKind(url)
+                                if (!k) return
+                                if (canGoBack) goBack(); else Qt.callLater(win.closeTab, pageItem.index)
+                                win.openPage(k)
+                            }
                             onLoadingStateChanged: if (!loading && url.indexOf("crumb-mediatest") >= 0) executeJavaScript(win.mediaTestJs)
                             onConsoleMessage: (m) => { if (m.startsWith("CRUMB_MEDIA:")) console.log(m) }
                         }
@@ -658,6 +672,8 @@ Window {
             color: Theme.error; border.color: Theme.surface; border.width: 2
         }
         readonly property var p: win.currentPage
+        Component.onCompleted: if (buttonId === "downloads") win.downloadsButton = tbb
+        Component.onDestruction: if (win.downloadsButton === tbb) win.downloadsButton = null
         size: win.compact ? 32 : 40
         icon: ({ back: "\uE72B", forward: "\uE72A", home: "\uE80F", newTab: "\uE710", theme: "\uE790", settings: "\uE713",
                  downloads: "\uE896", extensions: "\uEA86", rewind: "\uE81C",
@@ -683,7 +699,7 @@ Window {
             case "home": p.goHome(); break
             case "newTab": win.newHomeTab(); break
             case "settings": win.openSettings(); break
-            case "downloads": win.openPage("downloads"); break
+            case "downloads": win.openDownloads(true); break
             case "rewind": win.openRewind(this); break
             case "extensions":
                 extMenu.parent = this
@@ -813,6 +829,26 @@ Window {
     function extMenuAnchor() { return extMenu.parent ? extMenu.parent : toolbarAddress }
 
     ExtensionPopup { id: extPopup }
+
+    // ----------------------------------------------------------- Загрузки
+    property Item downloadsButton: null
+    DownloadsPopup {
+        id: downloadsPopup
+        onOpenFullPage: win.openPage("downloads")
+    }
+    function openDownloads(toggle) {
+        if (downloadsPopup.opened) { if (toggle) downloadsPopup.close(); return }
+        const a = downloadsButton && downloadsButton.visible ? downloadsButton : toolbarAddress
+        downloadsPopup.parent = a
+        downloadsPopup.x = a.width - downloadsPopup.width
+        downloadsPopup.y = a.height + 8
+        downloadsPopup.open()
+    }
+    // Началась загрузка — показываем окошко, как Chrome/Edge.
+    Connections {
+        target: Downloads
+        function onRowsInserted() { if (win.active || win.visible) win.openDownloads(false) }
+    }
 
     // ------------------------------------------------------------ Rewind
     RewindPopup {

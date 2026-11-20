@@ -14,6 +14,7 @@
 #include "cef/CrumbCefApp.h"
 #include "storage/SettingsStore.h"
 #include "rewind/RewindManager.h"
+#include "downloads/FileIconProvider.h"
 #include "ui/Eyedropper.h"
 
 // Статический QML-модуль Crumb.Ui (тема, печеньки).
@@ -106,6 +107,7 @@ int main(int argc, char* argv[]) {
     QQmlApplicationEngine engine;
     engine.addImageProvider("eyedropper", new crumb::EyedropperImageProvider);
     engine.addImageProvider("rewind", new crumb::RewindImageProvider);
+    engine.addImageProvider("fileicon", new crumb::FileIconProvider);
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreationFailed, &app,
                      [] { QCoreApplication::exit(1); }, Qt::QueuedConnection);
     // Самотест сохранения настроек: CRUMB_SELFTEST=1 — запись из QML и выход.
