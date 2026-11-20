@@ -1,0 +1,26 @@
+#pragma code_page(65001)
+// Иконка и сведения о версии для Crumb-Setup.exe / Crumb-Uninstall.exe.
+
+1 ICON "../../resources/icons/build/crumb.ico"
+
+1 VERSIONINFO
+FILEVERSION 0,3,0,0
+PRODUCTVERSION 0,3,0,0
+BEGIN
+  BLOCK "StringFileInfo"
+  BEGIN
+    BLOCK "041904B0"
+    BEGIN
+      VALUE "CompanyName", "Crumb"
+      VALUE "FileDescription", "Установка Crumb"
+      VALUE "ProductName", "Crumb"
+      VALUE "FileVersion", "0.3.0"
+      VALUE "ProductVersion", "0.3.0"
+      VALUE "OriginalFilename", "Crumb-Setup.exe"
+    END
+  END
+  BLOCK "VarFileInfo"
+  BEGIN
+    VALUE "Translation", 0x419, 1200
+  END
+END

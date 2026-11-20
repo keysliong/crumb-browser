@@ -1,0 +1,12 @@
+/build/
+/third_party/cef/
+/third_party/_download/
+*.user
+.vs/
+/third_party/cef-codecs/
+/build-codecs/
+/third_party/_codecs_tmp/
+__pycache__/
+*.pyc
+*.mp4
+aqtinstall.log
