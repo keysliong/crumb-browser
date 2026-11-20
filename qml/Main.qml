@@ -27,7 +27,8 @@ Window {
     readonly property bool compact: Settings.toolbarCompact
 
     // ------------------------------------------------------------ модель
-    // tabs: uid, kind (home|settings|web), url, webStarted, fromHome, groupId
+    // tabs: uid, kind (home|settings|downloads|extensions|history|passwords|web), url, webStarted, fromHome, groupId,
+    //       lazy (восстановлена, сайт загрузится при первом открытии), savedTitle
     ListModel { id: tabs }
     // groups: gid, name, colorIndex, collapsed
     ListModel { id: groups }
@@ -39,6 +40,10 @@ Window {
     readonly property var currentPage: { pages.count; return pageAt(currentIndex) }
 
     onCurrentIndexChanged: {
+        wake(currentIndex)
+        findBar.close()
+        hidePanels()
+        scheduleSave()
         toolbarAddress.cancelEditing()
         if (currentPage && currentPage.kind === "home") Qt.callLater(() => toolbarAddress.focusAddress())
     }
@@ -48,7 +53,7 @@ Window {
     function newTab(kind, url, index, activate, groupId) {
         const at = (index === undefined || index < 0 || index > tabs.count) ? tabs.count : index
         tabs.insert(at, { uid: nextUid++, kind: kind, url: url || "", webStarted: kind === "web",
-                          fromHome: false, groupId: groupId === undefined ? -1 : groupId })
+                          fromHome: false, groupId: groupId === undefined ? -1 : groupId, lazy: false, savedTitle: "" })
         if (activate === undefined || activate) {
             currentIndex = at
             if (kind === "home") Qt.callLater(() => toolbarAddress.focusAddress())
@@ -74,13 +79,16 @@ Window {
         else newTab("web", t, index)
     }
     readonly property var internalPages: ({ "crumb://settings": "settings", "crumb://downloads": "downloads",
-                                            "crumb://extensions": "extensions" })
+                                            "crumb://extensions": "extensions", "crumb://history": "history",
+                                            "crumb://passwords": "passwords" })
     // Своя страница Crumb для адреса (в т.ч. chrome://extensions и chrome://downloads) или "".
     function internalKind(u) {
         const t = String(u).trim().toLowerCase().replace(/\/+$/, "")
         if (internalPages[t]) return internalPages[t]
         if (/^chrome:\/\/extensions([\/?#]|$)/.test(t)) return "extensions"
         if (/^chrome:\/\/downloads([\/?#]|$)/.test(t)) return "downloads"
+        if (/^chrome:\/\/history([\/?#]|$)/.test(t)) return "history"
+        if (/^chrome:\/\/(password-manager|settings\/passwords)([\/?#]|$)/.test(t)) return "passwords"
         return ""
     }
 
@@ -94,8 +102,8 @@ Window {
     function closeTab(i) {
         if (i < 0 || i >= tabs.count) return
         const p = pageAt(i)
-        if (p) closedTabs = closedTabs.concat([{ kind: tabs.get(i).kind, url: p.currentUrl, index: i,
-                                                 groupId: tabs.get(i).groupId }]).slice(-25)
+        if (p) closedTabs = closedTabs.concat([{ kind: tabs.get(i).kind, url: p.currentUrl || tabs.get(i).url, index: i,
+                                                 groupId: tabs.get(i).groupId, title: p.title }]).slice(-25)
         if (tabs.count === 1) { close(); return }   // последняя вкладка — закрываем окно
         const wasCurrent = i === currentIndex
         tabs.remove(i)
@@ -104,10 +112,13 @@ Window {
     }
     function closeOthers(i) { for (let k = tabs.count - 1; k >= 0; --k) if (k !== i) closeTab(k) }
 
-    function reopenClosed() {
-        if (closedTabs.length === 0) return
-        const t = closedTabs[closedTabs.length - 1]
-        closedTabs = closedTabs.slice(0, -1)
+    function reopenClosed() { reopenClosedAt(closedTabs.length - 1) }
+    function reopenClosedAt(k) {
+        if (k < 0 || k >= closedTabs.length) return
+        const t = closedTabs[k]
+        const rest = closedTabs.slice()
+        rest.splice(k, 1)
+        closedTabs = rest
         const kind = t.kind === "web" && t.url.length ? "web" : t.kind
         newTab(kind, t.url, Math.min(t.index, tabs.count), true, groupExists(t.groupId) ? t.groupId : -1)
     }
@@ -169,6 +180,9 @@ Window {
         case "downloads": openPage("downloads"); break
         case "extensions": openPage("extensions"); break
         case "rewind": openRewind(); break
+        case "history": openPage("history"); break
+        case "passwords": openPage("passwords"); break
+        case "find": openFind(); break
         }
     }
 
@@ -187,6 +201,9 @@ Window {
         case BrowserView.CmdSelectLastTab: activate(tabs.count - 1); break
         case BrowserView.CmdDuplicateTab: duplicate(fromIndex); break
         case BrowserView.CmdRestoreTab: reopenClosed(); break
+        case BrowserView.CmdFind: openFind(); break
+        case BrowserView.CmdFindNext: findBar.opened ? findBar.next() : openFind(); break
+        case BrowserView.CmdFindPrevious: findBar.opened ? findBar.prev() : openFind(); break
         default:
             if (id >= BrowserView.CmdSelectTab0 && id <= BrowserView.CmdSelectTab7)
                 activate(id - BrowserView.CmdSelectTab0)
@@ -196,6 +213,9 @@ Window {
     // Окно закрывается только после того, как CEF закроет все браузеры.
     onClosing: (close) => {
         close.accepted = false
+        saveSession()
+        sessionFrozen = true
+        hidePanels()
         CefRuntime.requestQuit()
     }
 
@@ -203,8 +223,10 @@ Window {
         WindowEffects.roundCorners(win, true)
         if (CefRuntime.env("CRUMB_MEDIATEST").length) urlsForTest()
         const urls = CefRuntime.startupUrls()
+        const restored = Settings.startupMode === "restore" && !CefRuntime.env("CRUMB_MEDIATEST").length && restoreSession()
         if (urls.length > 0) urls.forEach(u => openUrl(u))
-        else newHomeTab()
+        else if (!restored) newHomeTab()
+        sessionReady = true
     }
     // Медиа-самотест: что умеет движок в защищённом контексте (https) —
     // MSE-кодеки, <audio>.canPlayType и Widevine (EME). Результат — в stderr.
@@ -432,7 +454,14 @@ Window {
                     secure: win.currentPage ? win.currentPage.secure : false
                     loading: win.currentPage ? win.currentPage.loading : false
                     onEditingStarted: if (win.currentPage) win.currentPage.releasePageFocus()
-                    onSubmitted: (text) => win.currentPage.navigate(text)
+                    onEditingFinished: suggest.hide()
+                    onTyped: (t) => win.updateSuggestions(t)
+                    onArrow: (step) => suggest.move(step)
+                    onSubmitted: (text) => {
+                        const s = suggest.shown && suggest.current >= 0 ? suggest.items[suggest.current] : null
+                        suggest.hide()
+                        win.currentPage.navigate(s ? win.suggestionTarget(s) : text)
+                    }
                 }
 
                 // Закреплённые расширения — печеньки с их значками
@@ -452,7 +481,7 @@ Window {
 
                 // Кнопки после адресной строки
                 Repeater {
-                    model: (Settings.toolbarButtons || []).filter(id => ["extensions", "rewind", "downloads", "theme", "settings"].indexOf(id) >= 0)
+                    model: (Settings.toolbarButtons || []).filter(id => ["extensions", "history", "passwords", "rewind", "downloads", "theme", "settings"].indexOf(id) >= 0)
                     ToolbarButton { required property string modelData; buttonId: modelData }
                 }
             }
@@ -545,8 +574,12 @@ Window {
                     required property bool webStarted
                     required property bool fromHome
                     required property int groupId
+                    required property bool lazy
+                    required property string savedTitle
 
                     anchors.fill: parent
+                    onCurrentUrlChanged: win.scheduleSave()
+                    onTitleChanged: win.scheduleSave()
                     readonly property bool current: index === win.currentIndex
                     visible: current
                     onCurrentChanged: if (current && !isWeb && Prefs.animations) pageEnter.restart()
@@ -561,19 +594,25 @@ Window {
                     readonly property var view: webLoader.item
                     readonly property bool isWeb: kind === "web"
                     readonly property bool isInternal: kind === "settings" || kind === "downloads" || kind === "extensions"
+                                                       || kind === "history" || kind === "passwords"
                     readonly property string title: kind === "home" ? qsTr("Новая вкладка")
                                                   : kind === "settings" ? qsTr("Настройки")
                                                   : kind === "downloads" ? qsTr("Загрузки")
-                                                  : kind === "extensions" ? qsTr("Расширения") : (view ? view.title : "")
-                    readonly property string favicon: kind === "home" ? "qrc:/crumb/icon.png" : (isWeb && view ? view.favicon : "")
+                                                  : kind === "extensions" ? qsTr("Расширения")
+                                                  : kind === "history" ? qsTr("История")
+                                                  : kind === "passwords" ? qsTr("Пароли")
+                                                  : (view && view.title.length ? view.title : (savedTitle.length ? savedTitle : url))
+                    readonly property string favicon: kind === "home" ? "qrc:/crumb/icon.png"
+                                                    : (isWeb && view ? view.favicon : (isWeb && lazy ? History.iconFor(url) : ""))
                     readonly property string glyph: kind === "settings" ? "\uE713" : kind === "downloads" ? "\uE896"
-                                                  : kind === "extensions" ? "\uEA86" : ""
+                                                  : kind === "extensions" ? "\uEA86" : kind === "history" ? "\uE823"
+                                                  : kind === "passwords" ? "\uE8D7" : ""
                     readonly property bool loading: isWeb && view ? view.loading : false
                     readonly property real progress: isWeb && view ? view.progress : 0
                     readonly property bool secure: isWeb && view ? view.secure : false
                     readonly property string displayUrl: isInternal ? "crumb://" + kind
                                                        : kind === "home" ? "" : (view ? view.displayUrl : url)
-                    readonly property string currentUrl: isWeb && view ? view.url : (isInternal ? "crumb://" + kind : "")
+                    readonly property string currentUrl: isWeb && view ? view.url : (isInternal ? "crumb://" + kind : (isWeb ? url : ""))
                     readonly property bool canGoBack: isWeb ? (view !== null && (view.canGoBack || fromHome)) : false
                     readonly property bool canGoForward: isWeb ? (view !== null && view.canGoForward) : (kind === "home" && webStarted)
 
@@ -581,7 +620,16 @@ Window {
                     function navigate(text) {
                         const t = text.trim()
                         if (!t.length) return
-                        if (win.internalKind(t)) { win.openPage(win.internalKind(t)); return }
+                        if (lazy && !win.internalKind(t)) { tabs.setProperty(index, "lazy", false); tabs.setProperty(index, "url", t); tabs.setProperty(index, "webStarted", true); return }
+                        if (win.internalKind(t)) {
+                            // Пустая новая вкладка сама становится страницей Crumb (если такой ещё нет).
+                            const k = win.internalKind(t)
+                            let exists = false
+                            for (let i = 0; i < tabs.count; ++i) if (tabs.get(i).kind === k) exists = true
+                            if (!exists && kind === "home" && !webStarted) setKind(k); else win.openPage(k)
+                            toolbarAddress.cancelEditing()
+                            return
+                        }
                         if (t === "crumb://home" || t === "crumb://newtab") { setKind("home"); return }
                         const wasHome = kind === "home"
                         if (!webStarted) {
@@ -614,6 +662,7 @@ Window {
                         active: pageItem.webStarted
                         visible: pageItem.isWeb
                         sourceComponent: BrowserView {
+                            id: bv
                             initialUrl: pageItem.url
                             onAddressFocusRequested: toolbarAddress.focusAddress()
                             onPopupRequested: (target, background) => win.newTab("web", target, pageItem.index + 1, !background, pageItem.groupId)
@@ -626,8 +675,17 @@ Window {
                                 if (canGoBack) goBack(); else Qt.callLater(win.closeTab, pageItem.index)
                                 win.openPage(k)
                             }
-                            onLoadingStateChanged: if (!loading && url.indexOf("crumb-mediatest") >= 0) executeJavaScript(win.mediaTestJs)
-                            onConsoleMessage: (m) => { if (m.startsWith("CRUMB_MEDIA:")) console.log(m) }
+                            onLoadingStateChanged: {
+                                if (loading) { if (fillPanel.view === bv) fillPanel.hide(); return }
+                                // Скрипт входа на сайтах: предложить сохранить пароль и подставить сохранённый.
+                                if ((Settings.passwordsOffer || Settings.passwordsAutofill) && /^https?:/.test(url))
+                                    executeJavaScript(Passwords.captureJs())
+                                if (url.indexOf("crumb-mediatest") >= 0) executeJavaScript(win.mediaTestJs)
+                            }
+                            onConsoleMessage: (m) => {
+                                if (m.startsWith("CRUMB_PW_")) win.passwordMessage(bv, m)
+                                else if (m.startsWith("CRUMB_MEDIA:")) console.log(m)
+                            }
                         }
                     }
                     Loader {
@@ -649,6 +707,22 @@ Window {
                         anchors.fill: parent
                         active: pageItem.kind === "downloads"
                         sourceComponent: DownloadsPage {}
+                    }
+                    Loader {
+                        anchors.fill: parent
+                        active: pageItem.kind === "history"
+                        sourceComponent: HistoryPage {
+                            closedTabs: win.closedTabs
+                            onOpenUrl: (u) => win.openUrl(u, pageItem.index + 1)
+                            onReopenClosed: (k) => win.reopenClosedAt(k)
+                        }
+                    }
+                    Loader {
+                        anchors.fill: parent
+                        active: pageItem.kind === "passwords"
+                        sourceComponent: PasswordsPage {
+                            onOpenUrl: (u) => win.openUrl(u, pageItem.index + 1)
+                        }
                     }
                     Loader {
                         anchors.fill: parent
@@ -717,7 +791,7 @@ Window {
         Component.onDestruction: if (win.downloadsButton === tbb) win.downloadsButton = null
         size: win.compact ? 32 : 40
         icon: ({ back: "\uE72B", forward: "\uE72A", home: "\uE80F", newTab: "\uE710", theme: "\uE790", settings: "\uE713",
-                 downloads: "\uE896", extensions: "\uEA86", rewind: "\uE81C",
+                 downloads: "\uE896", extensions: "\uEA86", rewind: "\uE81C", history: "\uE823", passwords: "\uE8D7",
                  reload: p && p.loading ? "" : "" })[buttonId] || ""
         variant: buttonId === "theme" ? "filled" : "tonal"
         toolTip: ({ back: qsTr("Назад (%1)").arg(Settings.shortcutBack), forward: qsTr("Вперёд (%1)").arg(Settings.shortcutForward),
@@ -727,6 +801,7 @@ Window {
                     downloads: Downloads.activeCount > 0 ? qsTr("Загрузки: %1 в процессе").arg(Downloads.activeCount)
                                                          : qsTr("Загрузки (%1)").arg(Settings.shortcutDownloads),
                     extensions: qsTr("Расширения"),
+                    history: qsTr("История (%1)").arg(Settings.shortcutHistory), passwords: qsTr("Пароли"),
                     rewind: Rewind.unseenWatches > 0 ? qsTr("Rewind: изменилось %1").arg(Rewind.unseenWatches)
                                                      : qsTr("Rewind — машина времени (%1)").arg(Settings.shortcutRewind) })[buttonId] || ""
         enabled: buttonId === "back" ? (p ? p.canGoBack : false)
@@ -742,6 +817,8 @@ Window {
             case "settings": win.openSettings(); break
             case "downloads": win.openDownloads(true); break
             case "rewind": win.openRewind(this); break
+            case "history": win.openPage("history"); break
+            case "passwords": win.openPage("passwords"); break
             case "extensions":
                 extMenu.parent = this
                 extMenu.x = width - extMenu.width
@@ -959,6 +1036,212 @@ Window {
         onPicked: (c) => Theme.customColor = c
     }
 
+    // ================================================= сеанс: вкладки
+    // Вкладки и группы сохраняются через полторы секунды после любого изменения
+    // (и при закрытии окна) — после перезапуска или сбоя всё вернётся.
+    property bool sessionReady: false
+    property bool sessionFrozen: false
+    function scheduleSave() { if (sessionReady && !sessionFrozen) sessionTimer.restart() }
+    Timer { id: sessionTimer; interval: 1500; onTriggered: win.saveSession() }
+    Connections {
+        target: tabs
+        function onCountChanged() { win.scheduleSave() }
+        function onDataChanged() { win.scheduleSave() }
+    }
+    Connections {
+        target: groups
+        function onCountChanged() { win.scheduleSave() }
+        function onDataChanged() { win.scheduleSave() }
+    }
+    onClosedTabsChanged: scheduleSave()
+
+    function saveSession() {
+        if (!sessionReady || sessionFrozen) return
+        const t = []
+        for (let i = 0; i < tabs.count; ++i) {
+            const m = tabs.get(i), p = pageAt(i)
+            const url = m.kind === "web" ? ((p && p.currentUrl) || m.url) : ""
+            t.push({ kind: m.kind, url: url, title: p ? p.title : m.savedTitle, groupId: m.groupId })
+        }
+        const g = []
+        for (let k = 0; k < groups.count; ++k) {
+            const x = groups.get(k)
+            g.push({ gid: x.gid, name: x.name, colorIndex: x.colorIndex, collapsed: x.collapsed })
+        }
+        const s = JSON.stringify({ v: 1, current: currentIndex, tabs: t, groups: g, closed: closedTabs.slice(-15) })
+        if (s !== Settings.sessionState) Settings.sessionState = s
+    }
+    function restoreSession() {
+        let s = null
+        try { s = JSON.parse(Settings.sessionState || "null") } catch (e) { return false }
+        if (!s || !s.tabs || !s.tabs.length) return false
+        for (const g of (s.groups || [])) {
+            groups.append({ gid: g.gid, name: g.name, colorIndex: g.colorIndex, collapsed: !!g.collapsed })
+            nextGid = Math.max(nextGid, g.gid + 1)
+        }
+        const cur = Math.max(0, Math.min(s.current || 0, s.tabs.length - 1))
+        for (let i = 0; i < s.tabs.length; ++i) {
+            const x = s.tabs[i]
+            const web = x.kind === "web" && !!x.url
+            const kind = x.kind === "web" ? (web ? "web" : "home") : x.kind
+            // Сайты загружаются, только когда вкладку откроют, — запуск остаётся быстрым.
+            tabs.append({ uid: nextUid++, kind: kind, url: web ? x.url : "", webStarted: web && i === cur,
+                          fromHome: false, groupId: groupExists(x.groupId) ? x.groupId : -1,
+                          lazy: web && i !== cur, savedTitle: x.title || "" })
+        }
+        closedTabs = s.closed || []
+        currentIndex = cur
+        return true
+    }
+    // Восстановленная вкладка: сайт начинает загружаться при первом открытии.
+    function wake(i) {
+        if (i < 0 || i >= tabs.count || !tabs.get(i).lazy) return
+        tabs.setProperty(i, "lazy", false)
+        tabs.setProperty(i, "webStarted", true)
+    }
+
+    // ================================================ поиск по странице
+    FindBar {
+        id: findBar
+        parent: pageArea
+        x: pageArea.width - width - 10
+        y: 8
+        onClosedByUser: { const p = win.currentPage; if (p && p.view && p.isWeb) p.view.focusPage() }
+    }
+    function openFind() {
+        const p = currentPage
+        if (!p || !p.isWeb || !p.view) return
+        p.releasePageFocus()
+        findBar.openFor(p.view)
+    }
+
+    // ============================================ подсказки адресной строки
+    SuggestList {
+        id: suggest
+        onPicked: (item) => { suggest.hide(); toolbarAddress.cancelEditing(); win.currentPage.navigate(win.suggestionTarget(item)) }
+    }
+    // «Поиск в интернете» — всегда поиск, даже если текст похож на адрес («127»).
+    function suggestionTarget(s) {
+        return s.kind === "search" ? Settings.searchTemplate().replace("%s", encodeURIComponent(s.url)) : s.url
+    }
+    function updateSuggestions(text) {
+        const t = text.trim()
+        if (!t.length) { suggest.hide(); return }
+        const looksUrl = t.indexOf(" ") < 0 && (/^[a-z]+:\/\//i.test(t) || /^[^\s.]+(\.[^\s.]+)+(\/.*)?$/.test(t) || /^localhost(:\d+)?/.test(t))
+        const first = looksUrl ? { kind: "go", title: t, text: qsTr("перейти"), url: t, icon: "" }
+                               : { kind: "search", title: t, text: qsTr("поиск в интернете"), url: t, icon: "" }
+        const hist = History.suggest(t, 6).map(h => ({ kind: "history", title: h.title || h.host,
+                                                       text: h.url.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, ""),
+                                                       url: h.url, icon: h.icon }))
+        suggest.items = [first].concat(hist.filter(h => h.url !== t))
+        suggest.current = -1
+        const a = toolbarAddress
+        const p = a.mapToGlobal(0, a.height + 4)
+        suggest.showAt(p.x - 2, p.y, a.width + 4, suggest.items.length * suggest.rowHeight + suggest.padding * 2 + 4)
+    }
+
+    // ===================================================== пароли на сайтах
+    PasswordSavePopup {
+        id: savePw
+        onSaved: toast.show(qsTr("Пароль сохранён — Crumb подставит его при следующем входе"))
+    }
+    // Список сохранённых входов под полем логина/пароля на сайте.
+    FloatingPanel {
+        id: fillPanel
+        property var view: null
+        property var items: []
+        Column {
+            anchors.fill: parent
+            Repeater {
+                model: fillPanel.items
+                Rectangle {
+                    id: acc
+                    required property var modelData
+                    width: parent.width
+                    height: 48
+                    radius: 16
+                    color: accHover.hovered ? Theme.secondaryContainer : "transparent"
+                    HoverHandler { id: accHover; cursorShape: Qt.PointingHandCursor }
+                    TapHandler {
+                        onTapped: {
+                            const js = Passwords.fillJs(acc.modelData.id)
+                            if (fillPanel.view && js.length) fillPanel.view.executeJavaScript(js)
+                            fillPanel.hide()
+                        }
+                    }
+                    CookieShape {
+                        id: accIcon
+                        x: 8
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: 32; height: 32
+                        color: Theme.primaryContainer
+                        Text { anchors.centerIn: parent; text: ""; font.family: Theme.iconFont; font.pixelSize: 13; color: Theme.onPrimaryContainer }
+                    }
+                    Column {
+                        anchors.left: accIcon.right; anchors.leftMargin: 12
+                        anchors.right: parent.right; anchors.rightMargin: 12
+                        anchors.verticalCenter: parent.verticalCenter
+                        CText { width: parent.width; text: acc.modelData.username || qsTr("Без имени пользователя"); size: 14; elide: Text.ElideRight }
+                        CText { width: parent.width; text: "•••••••• · " + acc.modelData.site; size: 12; color: Theme.onSurfaceVariant; elide: Text.ElideRight }
+                    }
+                }
+            }
+            Rectangle {
+                width: parent.width
+                height: 40
+                radius: 14
+                color: mgrHover.hovered ? Qt.alpha(Theme.onSurface, 0.07) : "transparent"
+                HoverHandler { id: mgrHover; cursorShape: Qt.PointingHandCursor }
+                TapHandler { onTapped: { fillPanel.hide(); win.openPage("passwords") } }
+                CText { anchors.left: parent.left; anchors.leftMargin: 14; anchors.verticalCenter: parent.verticalCenter; text: qsTr("Управление паролями…"); size: 13; color: Theme.primary }
+            }
+        }
+    }
+    function passwordMessage(view, m) {
+        const sep = m.indexOf(":")
+        const kind = m.slice(0, sep)
+        let d = {}
+        try { d = JSON.parse(m.slice(sep + 1) || "{}") } catch (e) { return }
+        const pageUrl = String(view.url)
+        if (kind === "CRUMB_PW_SAVE") {
+            // Только для главного документа этой вкладки.
+            if (!d.o || !(pageUrl === d.o || pageUrl.startsWith(d.o + "/"))) return
+            const r = Passwords.check(pageUrl, d.u || "", d.p || "")
+            if (r !== "new" && r !== "update") return
+            const a = toolbarAddress
+            savePw.parent = a
+            savePw.x = a.width - savePw.width
+            savePw.y = a.height + 8
+            savePw.offer(pageUrl, d.u || "", d.p || "", r)
+        } else if (kind === "CRUMB_PW_FOCUS") {
+            const p = currentPage
+            if (!Settings.passwordsAutofill || !p || p.view !== view) return
+            const list = Passwords.forSite(pageUrl)
+            if (!list.length) { fillPanel.hide(); return }
+            const k = (d.dpr || 1) / (win.screen ? win.screen.devicePixelRatio : 1)
+            const g = view.mapToGlobal(d.x * k, (d.y + d.h) * k + 4)
+            if (g.y > view.mapToGlobal(0, view.height).y - 40) return   // поле у нижнего края — не мешаем
+            fillPanel.view = view
+            fillPanel.items = list
+            fillPanel.showAt(g.x - 4, g.y, Math.max(280, Math.min(400, d.w * k + 8)), list.length * 48 + 40 + fillPanel.padding * 2 + 4)
+        } else if (kind === "CRUMB_PW_BLUR") {
+            fillPanel.hide()
+        }
+    }
+
+    // Плавающие окна прячутся, когда Crumb уходит на задний план, двигается или меняет размер.
+    function hidePanels() { suggest.hide(); fillPanel.hide() }
+    onXChanged: hidePanels()
+    onYChanged: hidePanels()
+    onWidthChanged: hidePanels()
+    onHeightChanged: hidePanels()
+    Timer {
+        interval: 300
+        repeat: true
+        running: suggest.shown || fillPanel.shown
+        onTriggered: if (!CefRuntime.isForeground(win)) win.hidePanels()
+    }
+
     // ============================================== меню вкладки и группы
     ThemedMenu {
         id: tabMenu
@@ -1086,6 +1369,10 @@ Window {
     ActionShortcut { name: "settings" }
     ActionShortcut { name: "downloads" }
     ActionShortcut { name: "rewind" }
+    ActionShortcut { name: "history" }
+    ActionShortcut { name: "find" }
+    Shortcut { sequence: "F3"; onActivated: findBar.opened ? findBar.next() : win.openFind() }
+    Shortcut { sequence: "Shift+F3"; onActivated: findBar.opened ? findBar.prev() : win.openFind() }
     // Неизменяемые, как в Chrome
     Shortcut { sequences: ["Alt+D", "F6"]; onActivated: toolbarAddress.focusAddress() }
     Shortcut { sequence: "Ctrl+F4"; onActivated: win.closeTab(win.currentIndex) }

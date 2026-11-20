@@ -41,7 +41,8 @@ class BrowserView : public QQuickItem {
     CmdNewTab = 34014, CmdCloseTab = 34015, CmdSelectNextTab = 34016,
     CmdSelectPreviousTab = 34017, CmdSelectTab0 = 34018, CmdSelectTab7 = 34025,
     CmdSelectLastTab = 34026, CmdDuplicateTab = 34027, CmdRestoreTab = 34028,
-    CmdExit = 34031, CmdNewTabToRight = 35024
+    CmdExit = 34031, CmdNewTabToRight = 35024,
+    CmdFind = 37000, CmdFindNext = 37001, CmdFindPrevious = 37002
   };
   Q_ENUM(Command)
 
@@ -71,6 +72,9 @@ class BrowserView : public QQuickItem {
   Q_INVOKABLE void releasePageFocus();
   Q_INVOKABLE void closeBrowser();
   Q_INVOKABLE void executeJavaScript(const QString& code);
+  // Поиск по странице: findNext=false — новый запрос, true — следующее совпадение.
+  Q_INVOKABLE void find(const QString& text, bool forward, bool matchCase, bool findNext);
+  Q_INVOKABLE void stopFinding(bool clearSelection);
 
   // Вызываются из BrowserClient (уже в потоке Qt).
   void attachBrowser(CefRefPtr<CefBrowser> browser, quintptr hwnd);
@@ -98,6 +102,8 @@ class BrowserView : public QQuickItem {
   void consoleMessage(const QString& message);
   // Страница закрылась сама (window.close()), а не по нашей команде.
   void pageClosed();
+  // Результат поиска по странице: всего совпадений и номер текущего (с 1).
+  void findResult(int count, int active, bool finalUpdate);
 
  protected:
   void componentComplete() override;

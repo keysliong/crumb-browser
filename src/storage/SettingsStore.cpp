@@ -115,6 +115,14 @@ void SettingsStore::buildDefaults() {
       // Загрузки
       {"downloadsDir", QDir::toNativeSeparators(downloads)},
       {"downloadsAsk", false},
+      // Запуск: restore — открыть вкладки прошлого сеанса, home — новая вкладка
+      {"startupMode", "restore"},
+      {"sessionState", ""},      // вкладки и группы (JSON), пишет главное окно
+      // История и пароли
+      {"historyEnabled", true},
+      {"passwordsOffer", true},
+      {"passwordsAutofill", true},
+      {"passwordsNever", QVariantList{}},
       // Предлагать сделать Crumb браузером по умолчанию
       {"askDefaultBrowser", true},
       // Диагностика: журнал ошибок страниц
@@ -135,6 +143,8 @@ void SettingsStore::buildDefaults() {
       {"shortcutSettings", "Ctrl+,"},
       {"shortcutDownloads", "Ctrl+J"},
       {"shortcutRewind", "Ctrl+Shift+Y"},
+      {"shortcutHistory", "Ctrl+H"},
+      {"shortcutFind", "Ctrl+F"},
   };
 }
 

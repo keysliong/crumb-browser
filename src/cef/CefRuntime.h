@@ -22,6 +22,7 @@
 class QQmlEngine;
 class QJSEngine;
 class QTimer;
+#include <QWindow>
 
 namespace crumb {
 
@@ -55,6 +56,8 @@ class CefRuntime final : public QObject {
   void setConsoleLog(bool on);
   void logConsole(int level, const QString& message, const QString& source, int line);
   Q_INVOKABLE QString consoleLogPath() const;
+  // Окно Crumb (или его дочернее окно страницы) сейчас на переднем плане Windows.
+  Q_INVOKABLE bool isForeground(QWindow* window) const;
   // Попросить главное окно открыть адрес вкладкой (из любой страницы QML).
   Q_INVOKABLE void openUrlRequest(const QString& url) { emit strayUrlRequested(url); }
 

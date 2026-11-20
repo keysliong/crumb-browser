@@ -264,7 +264,7 @@ Item {
         { title: qsTr("Вкладки"), icon: "" }, { title: qsTr("Панель"), icon: "" },
         { title: qsTr("Шрифты"), icon: "" }, { title: qsTr("Анимации"), icon: "" },
         { title: qsTr("Домашняя страница"), icon: "" }, { title: qsTr("Курсор и звуки"), icon: "" },
-        { title: qsTr("Rewind"), icon: "" }, { title: qsTr("Приватность"), icon: "" },
+        { title: qsTr("Rewind"), icon: "" }, { title: qsTr("История и пароли"), icon: "\uE823" }, { title: qsTr("Приватность"), icon: "" },
         { title: qsTr("Поисковик"), icon: "" }, { title: qsTr("Загрузки"), icon: "" },
         { title: qsTr("Горячие клавиши"), icon: "" }, { title: qsTr("Резервная копия и сброс"), icon: "" },
         { title: qsTr("О Crumb"), icon: "" }
@@ -788,6 +788,15 @@ Item {
             Section {
                 title: qsTr("Вкладки"); icon: ""
                 SChoice {
+                    label: qsTr("При запуске")
+                    hint: qsTr("Восстановленные вкладки загружаются, только когда вы их открываете")
+                    keywords: "восстановить вкладки сеанс запуск"
+                    options: [{ value: "restore", label: qsTr("Вернуть вкладки"), icon: "\uE7A7" },
+                              { value: "home", label: qsTr("Новая вкладка"), icon: "\uE80F" }]
+                    current: Settings.startupMode
+                    onChosen: (v) => Settings.startupMode = v
+                }
+                SChoice {
                     label: qsTr("Расположение")
                     keywords: "вертикальные боковые"
                     options: [{ value: "top", label: qsTr("Сверху"), icon: "" },
@@ -836,6 +845,8 @@ Item {
                         { id: "newTab", label: qsTr("Новая вкладка"), icon: "\uE710" },
                         { id: "extensions", label: qsTr("Расширения («банка с печеньем»)"), icon: "\uEA86" },
                         { id: "rewind", label: qsTr("Rewind — машина времени"), icon: "\uE81C" },
+                        { id: "history", label: qsTr("История"), icon: "\uE823" },
+                        { id: "passwords", label: qsTr("Пароли"), icon: "\uE8D7" },
                         { id: "downloads", label: qsTr("Загрузки"), icon: "\uE896" },
                         { id: "theme", label: qsTr("Тема"), icon: "" },
                         { id: "settings", label: qsTr("Настройки"), icon: "" }
@@ -1172,6 +1183,51 @@ Item {
                 }
             }
 
+            // ------------------------------------------- История и пароли
+            Section {
+                title: qsTr("История и пароли"); icon: ""
+                SSwitch {
+                    label: qsTr("Сохранять историю посещений")
+                    hint: qsTr("Нужна для страницы «История» и подсказок в адресной строке. Хранится полгода")
+                    keywords: "история посещений подсказки"
+                    checked: Settings.historyEnabled
+                    onToggled: (on) => Settings.historyEnabled = on
+                }
+                SAction {
+                    label: qsTr("История")
+                    hint: qsTr("Посещений: %1 · %2").arg(History.count).arg(Settings.shortcutHistory)
+                    icon: ""; buttonText: qsTr("Открыть")
+                    onTriggered: CefRuntime.openUrlRequest("crumb://history")
+                }
+                SAction {
+                    label: qsTr("Удалить всю историю")
+                    keywords: "очистить история"
+                    icon: ""; buttonText: qsTr("Удалить")
+                    onTriggered: { History.clear(0); toast.show(qsTr("История удалена")) }
+                }
+                SSwitch {
+                    label: qsTr("Предлагать сохранить пароли")
+                    hint: qsTr("После входа на сайт Crumb спросит, запомнить ли пароль. Пароли шифруются Windows")
+                    keywords: "пароли менеджер сохранить"
+                    checked: Settings.passwordsOffer
+                    onToggled: (on) => Settings.passwordsOffer = on
+                }
+                SSwitch {
+                    label: qsTr("Подставлять сохранённые пароли")
+                    hint: qsTr("Нажмите в поле логина или пароля — появится список ваших входов на этом сайте")
+                    keywords: "автозаполнение пароли"
+                    checked: Settings.passwordsAutofill
+                    onToggled: (on) => Settings.passwordsAutofill = on
+                }
+                SAction {
+                    label: qsTr("Менеджер паролей")
+                    hint: qsTr("Сохранено: %1. Показать пароль можно после Windows Hello").arg(Passwords.count)
+                    keywords: "пароли"
+                    icon: ""; buttonText: qsTr("Открыть")
+                    onTriggered: CefRuntime.openUrlRequest("crumb://passwords")
+                }
+            }
+
             // -------------------------------------------------- Приватность
             Section {
                 title: qsTr("Приватность"); icon: ""
@@ -1239,7 +1295,8 @@ Item {
                             ["shortcutPrevTab", qsTr("Предыдущая вкладка")], ["shortcutAddress", qsTr("Адресная строка")],
                             ["shortcutReload", qsTr("Обновить страницу")], ["shortcutBack", qsTr("Назад")],
                             ["shortcutForward", qsTr("Вперёд")], ["shortcutHome", qsTr("Домашняя страница")],
-                            ["shortcutSettings", qsTr("Настройки")], ["shortcutDownloads", qsTr("Загрузки")], ["shortcutRewind", qsTr("Rewind")]]
+                            ["shortcutSettings", qsTr("Настройки")], ["shortcutDownloads", qsTr("Загрузки")], ["shortcutRewind", qsTr("Rewind")],
+                            ["shortcutHistory", qsTr("История")], ["shortcutFind", qsTr("Поиск на странице")]]
                     Row_ {
                         id: sc
                         required property var modelData

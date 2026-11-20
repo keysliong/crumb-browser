@@ -14,6 +14,8 @@
 #include "cef/CrumbCefApp.h"
 #include "storage/SettingsStore.h"
 #include "rewind/RewindManager.h"
+#include "history/HistoryManager.h"
+#include "passwords/PasswordManager.h"
 #include "downloads/FileIconProvider.h"
 #include "ui/Eyedropper.h"
 
@@ -37,6 +39,14 @@ void applyToChromium(const QString& key) {
     rt->setPreference("enable_do_not_track", s->get("privacyDnt").toBool());
   if (all || key == "privacyBlock3p")   // 1 — блокировать сторонние cookie, 0 — разрешить
     rt->setPreference("profile.cookie_controls_mode", s->get("privacyBlock3p").toBool() ? 1 : 0);
+  if (all) {
+    // Пароли сохраняет и подставляет сам Crumb — встроенный менеджер Chromium выключаем.
+    rt->setPreference("credentials_enable_service", false);
+    rt->setPreference("credentials_enable_autosignin", false);
+    rt->setPreference("profile.password_manager_enabled", false);
+    // Подсказки Chromium из истории полей вылезали бы поверх списка паролей Crumb.
+    rt->setPreference("autofill.profile_enabled", false);
+  }
   if (all || key == "debugConsoleLog")
     rt->setConsoleLog(s->get("debugConsoleLog").toBool());
   if (all || key.startsWith("downloads"))
@@ -89,6 +99,8 @@ int main(int argc, char* argv[]) {
   crumb::Prefs::instance();
   auto* settings = crumb::SettingsStore::instance();
   settings->load();
+  crumb::HistoryManager::instance()->open();
+  crumb::PasswordManager::instance()->open();
 
   // Страницы следуют теме Crumb, а не теме Windows.
   auto syncPages = [theme, runtime] {

@@ -26,7 +26,8 @@ class BrowserClient final : public CefClient,
                             public CefLoadHandler,
                             public CefKeyboardHandler,
                             public CefCommandHandler,
-                            public CefDownloadHandler {
+                            public CefDownloadHandler,
+                            public CefFindHandler {
  public:
   explicit BrowserClient(std::shared_ptr<ViewLink> link) : link_(std::move(link)) {}
 
@@ -36,6 +37,11 @@ class BrowserClient final : public CefClient,
   CefRefPtr<CefKeyboardHandler> GetKeyboardHandler() override { return this; }
   CefRefPtr<CefCommandHandler> GetCommandHandler() override { return this; }
   CefRefPtr<CefDownloadHandler> GetDownloadHandler() override { return this; }
+  CefRefPtr<CefFindHandler> GetFindHandler() override { return this; }
+
+  // CefFindHandler — результат поиска по странице («3 из 17»).
+  void OnFindResult(CefRefPtr<CefBrowser> browser, int identifier, int count, const CefRect& selectionRect,
+                    int activeMatchOrdinal, bool finalUpdate) override;
 
   // CefDownloadHandler — сохранять в папку из настроек (или спрашивать).
   bool OnBeforeDownload(CefRefPtr<CefBrowser> browser, CefRefPtr<CefDownloadItem> item,

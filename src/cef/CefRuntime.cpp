@@ -8,6 +8,10 @@
 #include <QQmlEngine>
 #include <QStandardPaths>
 #include <QTimer>
+#include <QWindow>
+#if defined(_WIN32)
+#include <windows.h>
+#endif
 
 #include <algorithm>
 
@@ -76,6 +80,17 @@ bool CefRuntime::initialize(const CefMainArgs& args, CefRefPtr<CefApp> app) {
 void CefRuntime::shutdown() {
   if (pump_) pump_->stop();
   CefShutdown();
+}
+
+bool CefRuntime::isForeground(QWindow* window) const {
+  if (!window) return false;
+#if defined(_WIN32)
+  HWND fg = GetForegroundWindow();
+  const HWND own = reinterpret_cast<HWND>(window->winId());
+  return fg == own || GetAncestor(fg, GA_ROOTOWNER) == own || IsChild(own, fg);
+#else
+  return window->isActive();
+#endif
 }
 
 QString CefRuntime::consoleLogPath() const {

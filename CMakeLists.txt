@@ -3,7 +3,7 @@
 # cmake-скрипты CEF при Ninja обнуляют глобальные CMAKE_CXX_FLAGS).
 
 cmake_minimum_required(VERSION 3.24)
-project(Crumb VERSION 0.4.0 LANGUAGES C CXX)
+project(Crumb VERSION 0.5.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -81,6 +81,9 @@ qt_add_executable(crumb WIN32
   src/rewind/RewindManager.h        src/rewind/RewindManager.cpp
   src/sync/SyncCrypto.h             src/sync/SyncCrypto.cpp
   src/sync/SyncManager.h            src/sync/SyncManager.cpp
+  src/history/HistoryManager.h      src/history/HistoryManager.cpp
+  src/passwords/PasswordManager.h   src/passwords/PasswordManager.cpp
+  src/passwords/WinVerify.h         src/passwords/WinVerify.cpp
   resources/crumb.manifest
   resources/crumb.rc
 )
@@ -102,12 +105,14 @@ qt_add_qml_module(crumb
     qml/DownloadsPage.qml
     qml/ExtensionsPage.qml
     qml/ExtensionPopup.qml qml/RewindPopup.qml qml/DownloadsPopup.qml
+    qml/HistoryPage.qml qml/PasswordsPage.qml qml/FindBar.qml qml/FloatingPanel.qml
+    qml/PasswordSavePopup.qml qml/SuggestList.qml
 )
 
 # Client ID OAuth-приложения GitHub для входа в аккаунт (Device Flow). Публичный, не секрет.
 set(CRUMB_GITHUB_CLIENT_ID "Ov23lif1IDrgv1cfJzAl" CACHE STRING "Client ID GitHub OAuth App для синхронизации")
 target_compile_definitions(crumb PRIVATE CRUMB_GITHUB_CLIENT_ID="${CRUMB_GITHUB_CLIENT_ID}")
-target_include_directories(crumb PRIVATE src src/cef src/ui src/storage src/home src/downloads src/extensions src/system src/rewind src/sync)
+target_include_directories(crumb PRIVATE src src/cef src/ui src/storage src/home src/downloads src/extensions src/system src/rewind src/sync src/history src/passwords)
 target_compile_definitions(crumb PRIVATE CRUMB_VERSION="${PROJECT_VERSION}")
 target_link_libraries(crumb PRIVATE Qt6::Core Qt6::Gui Qt6::Quick Qt6::QuickControls2 Qt6::Sql Qt6::Network crumb_ui crumb_uiplugin)
 crumb_use_cef(crumb)

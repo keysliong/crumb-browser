@@ -37,7 +37,7 @@ QString localPath() {
 
 // Эти настройки относятся к конкретному компьютеру и не синхронизируются.
 bool syncable(const QString& key) {
-  static const QStringList prefixes = {"sync", "debug", "window", "downloadsDir", "toolbarRewindAdded"};
+  static const QStringList prefixes = {"sync", "debug", "window", "downloadsDir", "toolbarRewindAdded", "session"};
   for (const QString& p : prefixes)
     if (key.startsWith(p)) return false;
   return true;

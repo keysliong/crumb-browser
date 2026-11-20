@@ -279,9 +279,18 @@ bool BrowserClient::OnBeforeDownload(CefRefPtr<CefBrowser>, CefRefPtr<CefDownloa
   return true;
 }
 
+void BrowserClient::OnFindResult(CefRefPtr<CefBrowser>, int, int count, const CefRect&, int active, bool finalUpdate) {
+  toView([=](BrowserView* v) { emit v->findResult(count, active, finalUpdate); });
+}
+
 bool BrowserClient::OnChromeCommand(CefRefPtr<CefBrowser>, int id, cef_window_open_disposition_t) {
   if (id == IDC_FOCUS_LOCATION) {
     toView([](BrowserView* v) { emit v->addressFocusRequested(); });
+    return true;
+  }
+  // Поиск по странице — своя панель Crumb вместо панели Chrome.
+  if (id == IDC_FIND || id == IDC_FIND_NEXT || id == IDC_FIND_PREVIOUS) {
+    toView([id](BrowserView* v) { emit v->chromeCommand(id); });
     return true;
   }
   // Команды вкладок и окон выполняет интерфейс Crumb, а не Chromium.

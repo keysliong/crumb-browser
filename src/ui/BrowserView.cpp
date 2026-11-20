@@ -8,6 +8,7 @@
 
 #include "cef/BrowserClient.h"
 #include "cef/CefRuntime.h"
+#include "history/HistoryManager.h"
 #include "ui/UrlUtil.h"
 
 #if defined(_WIN32)
@@ -95,9 +96,20 @@ void BrowserView::executeJavaScript(const QString& code) {
   if (browser_) browser_->GetMainFrame()->ExecuteJavaScript(toCef(code), "crumb://internal", 0);
 }
 
+void BrowserView::find(const QString& text, bool forward, bool matchCase, bool findNext) {
+  if (!browser_) return;
+  if (text.isEmpty()) { browser_->GetHost()->StopFinding(true); emit findResult(0, 0, true); return; }
+  browser_->GetHost()->Find(toCef(text), forward, matchCase, findNext);
+}
+
+void BrowserView::stopFinding(bool clearSelection) {
+  if (browser_) browser_->GetHost()->StopFinding(clearSelection);
+}
+
 void BrowserView::setFaviconFromCef(const QString& dataUrl) {
   if (dataUrl == favicon_) return;
   favicon_ = dataUrl;
+  HistoryManager::instance()->setIcon(url_, dataUrl);
   emit faviconChanged();
 }
 
@@ -154,12 +166,14 @@ QString BrowserView::displayUrl() const {
 void BrowserView::setUrlFromCef(const QString& url) {
   if (url == url_) return;
   url_ = url;
+  HistoryManager::instance()->visit(url, QString());
   emit urlChanged();
 }
 
 void BrowserView::setTitleFromCef(const QString& title) {
   if (title == title_) return;
   title_ = title;
+  HistoryManager::instance()->setTitle(url_, title);
   emit titleChanged();
 }
 

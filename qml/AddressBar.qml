@@ -14,6 +14,8 @@ Rectangle {
     signal submitted(string text)
     signal editingStarted()
     signal editingFinished()
+    signal typed(string text)          // человек изменил текст (для подсказок)
+    signal arrow(int step)             // ↑/↓ — по подсказкам
 
     // Пока клавиатура у страницы (окно CEF), Qt считает своё окно неактивным и
     // forceActiveFocus() лишь «помечает» поле. Поэтому сначала просим забрать
@@ -97,6 +99,9 @@ Rectangle {
                 bar.editingFinished()
             }
         }
+        onTextEdited: bar.typed(text)
+        Keys.onUpPressed: bar.arrow(-1)
+        Keys.onDownPressed: bar.arrow(1)
         onAccepted: {
             bar.submitted(text)
             focus = false

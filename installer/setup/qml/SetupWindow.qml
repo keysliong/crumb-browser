@@ -234,7 +234,7 @@ Window {
                 Title { text: qsTr("Добро пожаловать!"); Layout.topMargin: 10 }
                 Body { text: qsTr("Сейчас мы установим Crumb — браузер на движке Chromium в стиле Material You.") }
                 Item { implicitHeight: 14 }
-                FeatureRow { order: 0; icon: "\uE8D6"; text: qsTr("Яндекс Музыка и видео — кодеки AAC/H.264") }
+                FeatureRow { order: 0; icon: ""; text: qsTr("Свои пароли, история и поиск по странице") }
                 FeatureRow { order: 1; icon: "\uE81C"; text: qsTr("Rewind — машина времени для каждой страницы") }
                 FeatureRow { order: 2; icon: "\uE77B"; text: qsTr("Аккаунт: настройки и расширения на всех ПК") }
                 FeatureRow { order: 3; icon: "\uE790"; text: qsTr("Цвета из обоев, печеньки и живые анимации") }
