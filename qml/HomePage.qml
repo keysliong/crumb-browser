@@ -724,17 +724,28 @@ Item {
                 }
                 // Градиенты — лентой в той же строке
                 Flickable {
+                    id: gradFlick
                     visible: Settings.homeBackground === "gradient"
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 58
+                    Layout.preferredWidth: 100     // ширину даёт строка, а не длина ленты
+                    Layout.preferredHeight: 66
                     Layout.leftMargin: 8
                     contentWidth: gradRow.width
+                    contentHeight: height
+                    flickableDirection: Flickable.HorizontalFlick
                     clip: true
                     boundsBehavior: Flickable.StopAtBounds
+                    // Колёсико листает ленту вбок (WheelHandler внутри Flickable попадает в contentItem,
+                    // поэтому обращаемся к ленте по id).
                     WheelHandler {
-                        onWheel: (e) => parent.contentX = Math.max(0, Math.min(parent.contentWidth - parent.width,
-                                                                               parent.contentX - e.angleDelta.y))
+                        target: null
+                        onWheel: (e) => {
+                            const d = e.angleDelta.y !== 0 ? e.angleDelta.y : e.angleDelta.x
+                            gradFlick.contentX = Math.max(0, Math.min(gradFlick.contentWidth - gradFlick.width, gradFlick.contentX - d))
+                        }
                     }
+                    Behavior on contentX { enabled: Prefs.animations && !gradFlick.dragging && !gradFlick.flicking; NumberAnimation { duration: Prefs.dur(180); easing.type: Easing.OutCubic } }
+                    ScrollBar.horizontal: ScrollBar { policy: gradFlick.contentWidth > gradFlick.width ? ScrollBar.AlwaysOn : ScrollBar.AlwaysOff; height: 4 }
                     Row {
                         id: gradRow
                         spacing: 8

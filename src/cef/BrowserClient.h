@@ -27,7 +27,9 @@ class BrowserClient final : public CefClient,
                             public CefKeyboardHandler,
                             public CefCommandHandler,
                             public CefDownloadHandler,
-                            public CefFindHandler {
+                            public CefFindHandler,
+                            public CefRequestHandler,
+                            public CefContextMenuHandler {
  public:
   explicit BrowserClient(std::shared_ptr<ViewLink> link) : link_(std::move(link)) {}
 
@@ -38,6 +40,17 @@ class BrowserClient final : public CefClient,
   CefRefPtr<CefCommandHandler> GetCommandHandler() override { return this; }
   CefRefPtr<CefDownloadHandler> GetDownloadHandler() override { return this; }
   CefRefPtr<CefFindHandler> GetFindHandler() override { return this; }
+  CefRefPtr<CefRequestHandler> GetRequestHandler() override { return this; }
+  CefRefPtr<CefContextMenuHandler> GetContextMenuHandler() override { return this; }
+
+  // CefRequestHandler — системные страницы Chromium (chrome://, about:) в Crumb не открываются:
+  // вместо них — свои страницы Crumb или ничего.
+  bool OnBeforeBrowse(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame, CefRefPtr<CefRequest> request,
+                      bool user_gesture, bool is_redirect) override;
+  // CefContextMenuHandler — убираем из меню Chrome пункты, которых в Crumb нет
+  // (окна инкогнито, Google Lens, перевод, отправка на устройства и т.п.).
+  void OnBeforeContextMenu(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame,
+                           CefRefPtr<CefContextMenuParams> params, CefRefPtr<CefMenuModel> model) override;
 
   // CefFindHandler — результат поиска по странице («3 из 17»).
   void OnFindResult(CefRefPtr<CefBrowser> browser, int identifier, int count, const CefRect& selectionRect,
@@ -57,7 +70,7 @@ class BrowserClient final : public CefClient,
   // CefLifeSpanHandler
   bool OnBeforePopup(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame, int popup_id,
                      const CefString& target_url, const CefString& target_frame_name,
-                     WindowOpenDisposition target_disposition, bool user_gesture,
+                     CefLifeSpanHandler::WindowOpenDisposition target_disposition, bool user_gesture,
                      const CefPopupFeatures& popupFeatures, CefWindowInfo& windowInfo,
                      CefRefPtr<CefClient>& client, CefBrowserSettings& settings,
                      CefRefPtr<CefDictionaryValue>& extra_info,

@@ -104,6 +104,8 @@ class BrowserView : public QQuickItem {
   void pageClosed();
   // Результат поиска по странице: всего совпадений и номер текущего (с 1).
   void findResult(int count, int active, bool finalUpdate);
+  // Страница попыталась открыть системную страницу Chromium (chrome://…) — переход отменён.
+  void systemPageBlocked(const QString& url);
 
  protected:
   void componentComplete() override;

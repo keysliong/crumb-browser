@@ -13,7 +13,7 @@ set(_icons "${CMAKE_SOURCE_DIR}/resources/icons")
 add_custom_target(icons
   COMMAND $<TARGET_FILE:crumb_icongen>
           --big "${_icons}/crumb-${CRUMB_ICON_VARIANT}.svg"
-          --small "${_icons}/crumb-${CRUMB_ICON_VARIANT}-small.svg"
+          --small "${_icons}/crumb-${CRUMB_ICON_VARIANT}.svg"   # маленькие размеры — та же картинка, чтобы значок везде был одинаковым
           --out "${_icons}/build"
   DEPENDS crumb_icongen
   WORKING_DIRECTORY "${CRUMB_OUT_DIR}"

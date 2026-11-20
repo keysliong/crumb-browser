@@ -6,6 +6,7 @@
 #include <memory>
 #include <QQuickStyle>
 #include <QQuickWindow>
+#include <QStandardPaths>
 #include <QtQml/qqmlextensionplugin.h>
 
 #include "Prefs.h"
@@ -87,6 +88,10 @@ int main(int argc, char* argv[]) {
   QGuiApplication app(argc, argv);
   // Окно закрываем сами — после того как CEF закроет все браузеры.
   QGuiApplication::setQuitOnLastWindowClosed(false);
+
+  // CRUMB_DEMO=1 — отдельный чистый профиль (для скриншотов и проверок): все данные Crumb
+  // лежат в тестовой папке Qt, а не в %LOCALAPPDATA%\Crumb, и не мешают основному Crumb.
+  if (qEnvironmentVariableIsSet("CRUMB_DEMO")) QStandardPaths::setTestModeEnabled(true);
 
   auto* runtime = crumb::CefRuntime::instance();
   if (!runtime->initialize(mainArgs, cefApp)) {

@@ -372,6 +372,14 @@ void SetupBackend::runInstall() {
   RegCloseKey(key);
   if (!ok) return finishWork(tr("Ошибка записи в реестр."));
   if (registerBrowser_) registerAsBrowser(exe);
+  // Обновить значки: иначе Проводник и панель задач показывают старую иконку из кэша.
+  for (const QString& lnk : {knownFolder(FOLDERID_Programs) + "/Crumb.lnk", knownFolder(FOLDERID_Desktop) + "/Crumb.lnk",
+                             qEnvironmentVariable("APPDATA") + "/Microsoft/Internet Explorer/Quick Launch/User Pinned/TaskBar/Crumb.lnk"})
+    if (QFileInfo::exists(lnk))
+      SHChangeNotify(SHCNE_UPDATEITEM, SHCNF_PATHW, QDir::toNativeSeparators(lnk).toStdWString().c_str(), nullptr);
+  SHChangeNotify(SHCNE_UPDATEITEM, SHCNF_PATHW, QDir::toNativeSeparators(exe).toStdWString().c_str(), nullptr);
+  SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, nullptr, nullptr);
+  QProcess::startDetached("ie4uinit.exe", {"-show"});
   pause(300);
   setProgress(1.0, tr("Готово!"));
   finishWork({});

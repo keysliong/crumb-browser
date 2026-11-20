@@ -73,6 +73,13 @@ Window {
     // Открыть адрес новой вкладкой: crumb://… — внутренняя страница, остальное — сайт.
     function openUrl(u, index) {
         const t = String(u).trim()
+        if (isSystemUrl(t)) {
+            const k = systemKind(t)
+            if (k === "home") newTab("home", "", index)
+            else if (k) openPage(k)
+            else toast.show(qsTr("Эта служебная страница в Crumb недоступна"))
+            return
+        }
         if (internalKind(t)) openPage(internalKind(t))
         else if (t === "crumb://home" || t === "crumb://newtab" || t.startsWith("chrome://newtab")
                  || t.startsWith("chrome://new-tab-page")) newTab("home", "", index)
@@ -90,6 +97,31 @@ Window {
         if (/^chrome:\/\/history([\/?#]|$)/.test(t)) return "history"
         if (/^chrome:\/\/(password-manager|settings\/passwords)([\/?#]|$)/.test(t)) return "passwords"
         return ""
+    }
+
+    // Системные страницы Chromium (chrome://flags, chrome://settings…) Crumb не показывает:
+    // для своих аналогов — страница Crumb, для остальных — короткое уведомление.
+    function isSystemUrl(u) {
+        const t = String(u).trim().toLowerCase()
+        if (/^about:(blank|srcdoc)/.test(t)) return false
+        return /^(about:|(chrome|chrome-untrusted|chrome-search|edge|brave|opera|vivaldi):\/\/)/.test(t)
+    }
+    function systemKind(u) {
+        const t = String(u).trim().toLowerCase().replace(/^(edge|brave|opera|vivaldi):\/\//, "chrome://")
+        const k = internalKind(t)
+        if (k) return k
+        if (/^chrome:\/\/settings\/(passwords|autofill)/.test(t)) return "passwords"
+        if (/^chrome:\/\/settings/.test(t) || t === "about:preferences") return "settings"
+        if (/^chrome:\/\/(newtab|new-tab-page)/.test(t) || t === "about:newtab" || t === "about:home") return "home"
+        return ""
+    }
+    function systemPage(u, index, canGoBack) {
+        const k = systemKind(u)
+        if (k === "home") { const p = pageAt(index); if (p) p.goHome(); return }
+        if (k) { openPage(k); return }
+        toast.show(qsTr("Эта служебная страница в Crumb недоступна"))
+        const p = pageAt(index)
+        if (p && p.isWeb && p.view && !canGoBack && !p.view.url.length) p.goHome()
     }
 
     // Нажатие на печеньку расширения: его всплывающее окно под кнопкой.
@@ -620,6 +652,7 @@ Window {
                     function navigate(text) {
                         const t = text.trim()
                         if (!t.length) return
+                        if (win.isSystemUrl(t) && !win.internalKind(t)) { toolbarAddress.cancelEditing(); win.systemPage(t, index, true); return }
                         if (lazy && !win.internalKind(t)) { tabs.setProperty(index, "lazy", false); tabs.setProperty(index, "url", t); tabs.setProperty(index, "webStarted", true); return }
                         if (win.internalKind(t)) {
                             // Пустая новая вкладка сама становится страницей Crumb (если такой ещё нет).
@@ -669,6 +702,7 @@ Window {
                             onChromeCommand: (id) => win.command(id, pageItem.index)
                             onShortcutTriggered: (name) => win.action(name, pageItem.index)
                             onPageClosed: win.closeTab(pageItem.index)
+                            onSystemPageBlocked: (u) => win.systemPage(u, pageItem.index, canGoBack)
                             onUrlChanged: {
                                 const k = win.internalKind(url)
                                 if (!k) return
@@ -995,21 +1029,36 @@ Window {
         target: Rewind
         function onWatchAdded(label) { toast.show(qsTr("Слежу за «%1» — сообщу, когда изменится").arg(label)) }
     }
-    // Короткое уведомление внизу окна
-    Rectangle {
+    // Короткое уведомление внизу окна. Отдельное окно без фокуса — иначе страница сайта
+    // (окно Chromium) закрывает его.
+    Window {
         id: toast
-        function show(t) { toastText.text = t; opacity = 1; toastTimer.restart() }
-        z: 100
-        anchors.horizontalCenter: parent.horizontalCenter
-        anchors.bottom: parent.bottom; anchors.bottomMargin: 28
-        width: Math.min(toastText.implicitWidth + 40, parent.width - 40); height: 44; radius: 22
-        color: Theme.inverseSurface
-        opacity: 0
-        visible: opacity > 0
-        transform: Translate { y: (1 - toast.opacity) * 24 }
-        Behavior on opacity { NumberAnimation { duration: Prefs.dur(260); easing.type: Easing.OutCubic } }
-        CText { id: toastText; anchors.centerIn: parent; width: Math.min(implicitWidth, parent.width - 40); elide: Text.ElideRight; color: Theme.inverseOnSurface; size: 14 }
-        Timer { id: toastTimer; interval: 3500; onTriggered: toast.opacity = 0 }
+        flags: Qt.ToolTip | Qt.FramelessWindowHint | Qt.WindowDoesNotAcceptFocus | Qt.NoDropShadowWindowHint
+        color: "transparent"
+        transientParent: win
+        width: Math.min(toastText.implicitWidth + 72, win.width - 40)
+        height: 52
+        property real shown: 0
+        function show(t) {
+            toastText.text = t
+            x = win.x + (win.width - width) / 2
+            y = win.y + win.height - height - 28
+            visible = true
+            shown = 1
+            toastTimer.restart()
+        }
+        Behavior on shown { NumberAnimation { duration: Prefs.dur(260); easing.type: Easing.OutCubic } }
+        onShownChanged: if (shown === 0) visible = false
+        Rectangle {
+            anchors.fill: parent
+            anchors.margins: 4
+            radius: height / 2
+            color: Theme.inverseSurface
+            opacity: toast.shown
+            transform: Translate { y: (1 - toast.shown) * 16 }
+            CText { id: toastText; anchors.centerIn: parent; width: Math.min(implicitWidth, parent.width - 28); elide: Text.ElideRight; color: Theme.inverseOnSurface; size: 14 }
+        }
+        Timer { id: toastTimer; interval: 3500; onTriggered: toast.shown = 0 }
     }
     // Старые профили: добавить кнопку Rewind на панель один раз.
     Timer {

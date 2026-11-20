@@ -13,6 +13,7 @@
 #include "cef/CefRuntime.h"
 #include "cef/CefTask.h"
 #include "include/cef_client.h"
+#include "include/cef_values.h"
 
 #if defined(_WIN32)
 #include <windows.h>
@@ -185,8 +186,20 @@ void ExtensionManager::setEnabled(const QString& id, bool enabled) {
 }
 
 void ExtensionManager::remove(const QString& id) {
-  run(QStringLiteral("window.__crumbRemove(%1)")
-          .arg(QString::fromUtf8(QJsonDocument(QJsonArray{id}).toJson(QJsonDocument::Compact)).mid(1).chopped(1)));
+  // chrome.management.uninstall работает только «по нажатию человека» — обычный
+  // ExecuteJavaScript таким не считается. DevTools-команда Runtime.evaluate с
+  // userGesture: true выполняет код как действие пользователя.
+  const QString js = QStringLiteral("window.__crumbRemove(%1)")
+                         .arg(QString::fromUtf8(QJsonDocument(QJsonArray{id}).toJson(QJsonDocument::Compact)).mid(1).chopped(1));
+  CefRefPtr<CefBrowser> b = bridge_;
+  if (!b) return;
+  postToCefUi([b, js] {
+    CefRefPtr<CefDictionaryValue> params = CefDictionaryValue::Create();
+    params->SetString("expression", CefString(js.toStdWString()));
+    params->SetBool("userGesture", true);
+    params->SetBool("awaitPromise", false);
+    b->GetHost()->ExecuteDevToolsMethod(0, "Runtime.evaluate", params);
+  });
 }
 
 void ExtensionManager::loadUnpacked() { run("window.__crumbLoadUnpacked()"); }

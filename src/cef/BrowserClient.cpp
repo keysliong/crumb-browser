@@ -5,6 +5,8 @@
 #include <QFileInfo>
 #include <QKeySequence>
 #include <QMetaObject>
+#include <algorithm>
+#include <iterator>
 
 #include "cef/CefRuntime.h"
 #include "rewind/RewindManager.h"
@@ -83,7 +85,7 @@ void BrowserClient::postToView(const std::shared_ptr<ViewLink>& link, F&& fn) {
 
 bool BrowserClient::OnBeforePopup(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>, int,
                                   const CefString& target_url, const CefString&,
-                                  WindowOpenDisposition disposition, bool, const CefPopupFeatures&,
+                                  CefLifeSpanHandler::WindowOpenDisposition disposition, bool, const CefPopupFeatures&,
                                   CefWindowInfo& windowInfo, CefRefPtr<CefClient>& client, CefBrowserSettings&,
                                   CefRefPtr<CefDictionaryValue>&, bool*) {
   // window.open(url, name, "width=…") — настоящее окно со связью window.opener,
@@ -277,6 +279,59 @@ bool BrowserClient::OnBeforeDownload(CefRefPtr<CefBrowser>, CefRefPtr<CefDownloa
     callback->Continue(CefString(QDir::toNativeSeparators(path).toStdWString()), false);
   }
   return true;
+}
+
+namespace {
+// Схемы служебных страниц Chromium. about:blank и about:srcdoc нужны сайтам — их не трогаем.
+bool isSystemUrl(const QString& u) {
+  const QString l = u.toLower();
+  if (l.startsWith(QLatin1String("about:")))
+    return !(l.startsWith(QLatin1String("about:blank")) || l.startsWith(QLatin1String("about:srcdoc")));
+  return l.startsWith(QLatin1String("chrome://")) || l.startsWith(QLatin1String("chrome-untrusted://")) ||
+         l.startsWith(QLatin1String("chrome-search://")) || l.startsWith(QLatin1String("edge://")) ||
+         l.startsWith(QLatin1String("brave://")) || l.startsWith(QLatin1String("opera://")) ||
+         l.startsWith(QLatin1String("vivaldi://"));
+}
+}  // namespace
+
+bool BrowserClient::OnBeforeBrowse(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame> frame, CefRefPtr<CefRequest> request,
+                                   bool, bool) {
+  const QString url = qs(request->GetURL());
+  if (!isSystemUrl(url)) return false;
+  if (frame->IsMain()) toView([url](BrowserView* v) { emit v->systemPageBlocked(url); });
+  return true;   // отменить переход
+}
+
+void BrowserClient::OnBeforeContextMenu(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>, CefRefPtr<CefContextMenuParams>,
+                                        CefRefPtr<CefMenuModel> model) {
+  static const int hidden[] = {
+      IDC_CONTENT_CONTEXT_OPENLINKNEWWINDOW, IDC_CONTENT_CONTEXT_OPENLINKOFFTHERECORD,
+      IDC_CONTENT_CONTEXT_OPENLINKWITH, IDC_CONTENT_CONTEXT_OPENLINKINPROFILE,
+      IDC_CONTENT_CONTEXT_OPENLINKBOOKMARKAPP, IDC_CONTENT_CONTEXT_OPENLINKSPLITVIEW,
+      IDC_CONTENT_CONTEXT_SEARCHLENSFORIMAGE, IDC_CONTENT_CONTEXT_GLICSHAREIMAGE,
+      IDC_CONTENT_CONTEXT_SEARCHLENSFORVIDEOFRAME, IDC_CONTENT_CONTEXT_TRANSLATE,
+      IDC_CONTENT_CONTEXT_PARTIAL_TRANSLATE, IDC_CONTENT_CONTEXT_LANGUAGE_SETTINGS,
+      IDC_CONTENT_CONTEXT_OPEN_IN_READING_MODE, IDC_CONTENT_CONTEXT_LENS_REGION_SEARCH,
+      IDC_CONTENT_CONTEXT_WEB_REGION_SEARCH, IDC_CONTENT_CONTEXT_GENERATEPASSWORD,
+      IDC_CONTENT_CONTEXT_SHOWALLSAVEDPASSWORDS, IDC_CONTENT_CONTEXT_ADD_A_NOTE,
+      IDC_CONTENT_CONTEXT_LENS_OVERLAY, IDC_CONTENT_CONTEXT_USE_PASSKEY_FROM_ANOTHER_DEVICE,
+      IDC_CONTENT_CONTEXT_LISTEN_TO_THIS_PAGE, IDC_CONTENT_CONTEXT_INSPECTELEMENT_WITH_GEMINI,
+      IDC_CONTENT_CONTEXT_VIEWPAGEINFO, IDC_CONTENT_CONTEXT_VIEWFRAMEINFO,
+      IDC_ROUTE_MEDIA, IDC_SEND_TAB_TO_SELF, IDC_QRCODE_GENERATOR};
+  for (int i = int(model->GetCount()) - 1; i >= 0; --i) {
+    const int id = model->GetCommandIdAt(size_t(i));
+    bool remove = std::find(std::begin(hidden), std::end(hidden), id) != std::end(hidden);
+    // «Открыть с помощью…» (приложения) и подменю без команды (Отправить на устройства и т.п.)
+    if (id >= IDC_CONTENT_CONTEXT_OPEN_WITH1 && id < IDC_CONTENT_CONTEXT_OPEN_WITH1 + 100) remove = true;
+    if (model->GetTypeAt(size_t(i)) == MENUITEMTYPE_SUBMENU && id < 0) remove = true;
+    if (remove) model->RemoveAt(size_t(i));
+  }
+  // Лишние разделители: в начале, в конце и подряд.
+  for (int i = int(model->GetCount()) - 1; i >= 0; --i) {
+    const bool sep = model->GetTypeAt(size_t(i)) == MENUITEMTYPE_SEPARATOR;
+    const bool last = i == int(model->GetCount()) - 1;
+    if (sep && (i == 0 || last || model->GetTypeAt(size_t(i - 1)) == MENUITEMTYPE_SEPARATOR)) model->RemoveAt(size_t(i));
+  }
 }
 
 void BrowserClient::OnFindResult(CefRefPtr<CefBrowser>, int, int count, const CefRect&, int active, bool finalUpdate) {
