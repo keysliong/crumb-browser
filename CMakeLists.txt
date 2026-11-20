@@ -104,7 +104,7 @@ qt_add_qml_module(crumb
 )
 
 # Client ID OAuth-приложения GitHub для входа в аккаунт (Device Flow). Публичный, не секрет.
-set(CRUMB_GITHUB_CLIENT_ID "" CACHE STRING "Client ID GitHub OAuth App для синхронизации")
+set(CRUMB_GITHUB_CLIENT_ID "Ov23lif1IDrgv1cfJzAl" CACHE STRING "Client ID GitHub OAuth App для синхронизации")
 target_compile_definitions(crumb PRIVATE CRUMB_GITHUB_CLIENT_ID="${CRUMB_GITHUB_CLIENT_ID}")
 target_include_directories(crumb PRIVATE src src/cef src/ui src/storage src/home src/downloads src/extensions src/system src/rewind src/sync)
 target_compile_definitions(crumb PRIVATE CRUMB_VERSION="${PROJECT_VERSION}")

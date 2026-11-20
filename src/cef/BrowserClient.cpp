@@ -37,6 +37,34 @@ class FaviconCallback final : public CefDownloadImageCallback {
   std::shared_ptr<ViewLink> link_;
   IMPLEMENT_REFCOUNTING(FaviconCallback);
 };
+
+// Настоящее всплывающее окно (window.open с размерами): вход через Google / GitHub,
+// оплата, OAuth. Таким окнам нужен window.opener — они возвращают результат
+// открывшей странице, поэтому вкладкой их открывать нельзя.
+class PopupClient final : public CefClient, public CefLifeSpanHandler, public CefDisplayHandler {
+ public:
+  CefRefPtr<CefLifeSpanHandler> GetLifeSpanHandler() override { return this; }
+  CefRefPtr<CefDisplayHandler> GetDisplayHandler() override { return this; }
+
+  bool OnBeforePopup(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>, int, const CefString& target_url, const CefString&,
+                     WindowOpenDisposition disposition, bool, const CefPopupFeatures&, CefWindowInfo&,
+                     CefRefPtr<CefClient>&, CefBrowserSettings&, CefRefPtr<CefDictionaryValue>&, bool*) override {
+    if (disposition == CEF_WOD_NEW_POPUP) return false;   // вложенный попап — тоже окном
+    CefRuntime::instance()->notifyStrayUrl(qs(target_url));   // ссылка из попапа — вкладкой Crumb
+    return true;
+  }
+  void OnAfterCreated(CefRefPtr<CefBrowser> browser) override {
+    CefRuntime::instance()->browserCreated();
+    CefRuntime::instance()->trackBrowser(browser, true);   // закроется при выходе из Crumb
+  }
+  void OnBeforeClose(CefRefPtr<CefBrowser> browser) override {
+    CefRuntime::instance()->trackBrowser(browser, false);
+    CefRuntime::instance()->browserClosed();
+  }
+
+ private:
+  IMPLEMENT_REFCOUNTING(PopupClient);
+};
 }  // namespace
 
 template <class F>
@@ -56,9 +84,16 @@ void BrowserClient::postToView(const std::shared_ptr<ViewLink>& link, F&& fn) {
 bool BrowserClient::OnBeforePopup(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>, int,
                                   const CefString& target_url, const CefString&,
                                   WindowOpenDisposition disposition, bool, const CefPopupFeatures&,
-                                  CefWindowInfo&, CefRefPtr<CefClient>&, CefBrowserSettings&,
+                                  CefWindowInfo& windowInfo, CefRefPtr<CefClient>& client, CefBrowserSettings&,
                                   CefRefPtr<CefDictionaryValue>&, bool*) {
-  // Всплывающее окно Chromium не создаём — интерфейс Crumb откроет новую вкладку.
+  // window.open(url, name, "width=…") — настоящее окно со связью window.opener,
+  // как в Chrome (вход через Google на claude.ai и т.п.). Своё окно Chrome-стиля.
+  if (disposition == CEF_WOD_NEW_POPUP) {
+    windowInfo.runtime_style = CEF_RUNTIME_STYLE_CHROME;
+    client = new PopupClient();
+    return false;
+  }
+  // Обычные ссылки «в новой вкладке» — вкладкой Crumb.
   const QString url = qs(target_url);
   const bool background = disposition == CEF_WOD_NEW_BACKGROUND_TAB;
   toView([url, background](BrowserView* v) { v->handlePopup(url, background); });
