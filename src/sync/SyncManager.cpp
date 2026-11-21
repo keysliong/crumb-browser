@@ -347,6 +347,29 @@ bool SyncManager::setPassphrase(const QString& pass) {
   return true;
 }
 
+bool SyncManager::resetPassphrase(const QString& pass) {
+  if (token_.isEmpty()) return false;
+  if (pass.size() < 6) {
+    setError(QStringLiteral("Пароль синхронизации — не короче 6 символов."));
+    return false;
+  }
+  // Новая соль и ключ; содержимое Gist заменится данными с этого компьютера (тот же Gist).
+  // Другие компьютеры не смогут расшифровать новое — попросят ввести новый пароль.
+  salt_ = crypto::randomBytes(16);
+  key_ = crypto::deriveKey(pass.toUtf8(), salt_, kIterations);
+  remoteBlob_.clear();
+  lastSyncAt_ = 0;
+  dirtyKeys_.clear();
+  dirtyOther_ = false;
+  setError({});
+  saveLocal();
+  setState("ready");
+  emit stateChanged();
+  push();
+  periodic_->start();
+  return true;
+}
+
 void SyncManager::signOut(bool deleteCloud) {
   if (deleteCloud && !gistId_.isEmpty() && !token_.isEmpty()) {
     QNetworkReply* r = api("DELETE", "/gists/" + gistId_);

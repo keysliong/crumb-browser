@@ -453,12 +453,24 @@ Item {
 
                 // Пароль синхронизации
                 Row_ {
+                    id: passRow
+                    // reset — «Забыли пароль?»: задать новый, облако перезапишется данными этого ПК
+                    property bool reset: false
+                    function submit() {
+                        const ok = reset ? Sync.resetPassphrase(passInput.text) : Sync.setPassphrase(passInput.text)
+                        if (ok) { passInput.text = ""; reset = false }
+                    }
                     visible: shown && Sync.state === "needPassphrase"
-                    label: Sync.remoteExists ? qsTr("Введите пароль синхронизации") : qsTr("Придумайте пароль синхронизации")
+                    label: reset ? qsTr("Новый пароль синхронизации")
+                         : Sync.remoteExists ? qsTr("Введите пароль синхронизации") : qsTr("Придумайте пароль синхронизации")
                     keywords: "пароль синхронизации шифрование"
                     CText {
                         Layout.fillWidth: true; wrapMode: Text.WordWrap; size: 13.5; color: Theme.onSurfaceVariant
-                        text: Sync.remoteExists
+                        text: passRow.reset
+                              ? qsTr("Старый пароль восстановить нельзя: им зашифрованы данные в облаке, и прочитать их без него не может никто. "
+                                   + "Задайте новый пароль — данные в облаке заменятся настройками, домашней страницей и расширениями с этого компьютера. "
+                                   + "На других компьютерах Crumb попросит ввести новый пароль.")
+                              : Sync.remoteExists
                               ? qsTr("Тот же пароль, что вы задали на первом компьютере. Без него данные из облака не прочитать.")
                               : qsTr("Им шифруются ваши данные перед отправкой в GitHub. Он понадобится на других компьютерах. "
                                    + "Если забудете — данные в облаке не восстановить (настройки на этом компьютере останутся).")
@@ -476,7 +488,7 @@ Item {
                                 verticalAlignment: TextInput.AlignVCenter
                                 echoMode: TextInput.Password
                                 font.pixelSize: Prefs.px(15); color: Theme.onSurface
-                                onAccepted: if (Sync.setPassphrase(text)) text = ""
+                                onAccepted: passRow.submit()
                                 CText {
                                     anchors.fill: parent; verticalAlignment: Text.AlignVCenter
                                     visible: passInput.text.length === 0
@@ -485,9 +497,72 @@ Item {
                             }
                         }
                         CookieButton {
-                            icon: "\uE73E"; text: qsTr("Готово"); variant: "filled"
-                            onClicked: if (Sync.setPassphrase(passInput.text)) passInput.text = ""
+                            icon: passRow.reset ? "\uE72C" : "\uE73E"
+                            text: passRow.reset ? qsTr("Сбросить и сохранить") : qsTr("Готово")
+                            variant: "filled"
+                            onClicked: passRow.submit()
                         }
+                    }
+                    CText {
+                        visible: Sync.remoteExists
+                        text: passRow.reset ? qsTr("Я вспомнил пароль") : qsTr("Забыли пароль?")
+                        size: 13.5; color: Theme.primary; font.underline: forgotHover.hovered
+                        HoverHandler { id: forgotHover; cursorShape: Qt.PointingHandCursor }
+                        TapHandler { onTapped: { passRow.reset = !passRow.reset; passInput.text = ""; passInput.forceActiveFocus() } }
+                    }
+                }
+
+                // Сменить пароль синхронизации (когда всё работает)
+                Row_ {
+                    id: changeRow
+                    property bool open: false
+                    function save() {
+                        if (!Sync.resetPassphrase(newPassInput.text)) return
+                        newPassInput.text = ""
+                        open = false
+                        toast.show(qsTr("Пароль синхронизации изменён"))
+                    }
+                    visible: shown && Sync.state === "ready"
+                    label: qsTr("Пароль синхронизации")
+                    keywords: "сменить пароль синхронизации забыл сбросить"
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 10
+                        CText {
+                            Layout.fillWidth: true; wrapMode: Text.WordWrap; size: 13.5; color: Theme.onSurfaceVariant
+                            text: changeRow.open ? qsTr("Данные в облаке перешифруются новым паролем. На других компьютерах Crumb попросит ввести его.")
+                                                 : qsTr("Им зашифрованы ваши данные в GitHub. Забыли — задайте новый здесь")
+                        }
+                        CookieButton {
+                            visible: !changeRow.open
+                            icon: "\uE70F"; text: qsTr("Сменить"); variant: "tonal"
+                            onClicked: { changeRow.open = true; newPassInput.forceActiveFocus() }
+                        }
+                    }
+                    RowLayout {
+                        visible: changeRow.open
+                        Layout.fillWidth: true
+                        spacing: 10
+                        Rectangle {
+                            Layout.fillWidth: true; implicitHeight: 44; radius: 22
+                            color: Theme.surfaceContainerHighest
+                            border.width: newPassInput.activeFocus ? 2 : 0; border.color: Theme.primary
+                            TextInput {
+                                id: newPassInput
+                                anchors.fill: parent; anchors.leftMargin: 18; anchors.rightMargin: 18
+                                verticalAlignment: TextInput.AlignVCenter
+                                echoMode: TextInput.Password
+                                font.pixelSize: Prefs.px(15); color: Theme.onSurface
+                                onAccepted: changeRow.save()
+                                CText {
+                                    anchors.fill: parent; verticalAlignment: Text.AlignVCenter
+                                    visible: newPassInput.text.length === 0
+                                    text: qsTr("Новый пароль, не короче 6 символов"); color: Theme.onSurfaceVariant
+                                }
+                            }
+                        }
+                        CookieButton { icon: "\uE711"; variant: "surface"; toolTip: qsTr("Отмена"); onClicked: { newPassInput.text = ""; changeRow.open = false } }
+                        CookieButton { icon: "\uE73E"; text: qsTr("Сохранить"); variant: "filled"; onClicked: changeRow.save() }
                     }
                 }
 

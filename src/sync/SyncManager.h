@@ -63,6 +63,9 @@ class SyncManager final : public QObject {
   Q_INVOKABLE void signIn();                              // начать вход (получить код)
   Q_INVOKABLE void cancelSignIn();
   Q_INVOKABLE bool setPassphrase(const QString& pass);    // создать / ввести пароль синхронизации
+  // Забыли пароль (или хотите сменить): новый пароль, облако перезаписывается данными
+  // этого компьютера. Старые данные в облаке без старого пароля не прочитать — они заменяются.
+  Q_INVOKABLE bool resetPassphrase(const QString& pass);
   Q_INVOKABLE void syncNow();
   Q_INVOKABLE void signOut(bool deleteCloud = false);
   Q_INVOKABLE void dismissExtension(const QString& id);
