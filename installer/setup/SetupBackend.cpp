@@ -72,7 +72,7 @@ bool crumbRunningIn(const QString& dir) {
   bool found = false;
   for (BOOL ok = Process32FirstW(snap, &pe); ok && !found; ok = Process32NextW(snap, &pe)) {
     const QString name = QString::fromWCharArray(pe.szExeFile).toLower();
-    if (name != "crumb.exe" && name != "crumb_helper.exe") continue;
+    if (name != "crumbbrowser.exe" && name != "crumb.exe" && name != "crumb_helper.exe") continue;
     HANDLE h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pe.th32ProcessID);
     if (!h) continue;
     wchar_t path[MAX_PATH * 2];
@@ -219,11 +219,11 @@ SetupBackend::SetupBackend() : opt_(g_options) {
   if (opt_.uninstall) {
     // Сначала --dir (перезапуск из временной папки), потом запись в реестре.
     dir_ = !opt_.dirOverride.isEmpty() ? QDir::fromNativeSeparators(opt_.dirOverride) : installed;
-    already_ = !dir_.isEmpty() && QFile::exists(dir_ + "/Crumb.exe");
+    already_ = !dir_.isEmpty() && (QFile::exists(dir_ + "/CrumbBrowser.exe") || QFile::exists(dir_ + "/Crumb.exe"));
     if (dir_.isEmpty()) dir_ = defaultDir();
   } else {
     dir_ = installed.isEmpty() ? defaultDir() : installed;
-    already_ = !installed.isEmpty() && QFile::exists(installed + "/Crumb.exe");
+    already_ = !installed.isEmpty() && (QFile::exists(installed + "/CrumbBrowser.exe") || QFile::exists(installed + "/Crumb.exe"));
   }
 }
 
@@ -341,7 +341,9 @@ void SetupBackend::runInstall() {
 
   // 2. Ярлыки
   setProgress(0.64, tr("Создание ярлыков…"));
-  const QString exe = dir + "/Crumb.exe";
+  // До 0.5.2 браузер назывался Crumb.exe — Discord принимал его за игру «Crumb Circuit Simulator».
+  const QString exe = dir + "/CrumbBrowser.exe";
+  QFile::remove(dir + "/Crumb.exe");
   const QString desc = tr("Crumb — браузер в стиле Material You");
   removeShortcuts();
   if (startMenu_) {
@@ -351,6 +353,11 @@ void SetupBackend::runInstall() {
                    "--uninstall", dir, tr("Удалить Crumb"));
   }
   if (desktop_) createShortcut(knownFolder(FOLDERID_Desktop) + "/Crumb.lnk", exe, {}, dir, desc);
+  // Закреплённый на панели задач ярлык — на новый exe (иначе он вёл бы на удалённый Crumb.exe).
+  {
+    const QString pinned = qEnvironmentVariable("APPDATA") + "/Microsoft/Internet Explorer/Quick Launch/User Pinned/TaskBar/Crumb.lnk";
+    if (QFileInfo::exists(pinned)) createShortcut(pinned, exe, {}, dir, desc);
+  }
   pause(250);
   setProgress(0.8, tr("Создание ярлыков…"));
 
@@ -404,7 +411,7 @@ void SetupBackend::runUninstall() {
   auto files = readManifest(dir);
   if (files.isEmpty()) {
     // Нет списка файлов — удаляем только то, что точно наше.
-    for (const char* f : {"Crumb.exe", "crumb_helper.exe", "Uninstall.exe", "crumb_setup.exe"})
+    for (const char* f : {"CrumbBrowser.exe", "Crumb.exe", "crumb_helper.exe", "Uninstall.exe", "crumb_setup.exe"})
       files.push_back({false, QString::fromLatin1(f)});
   }
   std::set<QString> dirs;
@@ -441,7 +448,7 @@ void SetupBackend::quit() {
   if (busy_) return;
   if (!opt_.uninstall && finished_ && error_.isEmpty() && launch_) {
     const QString d = QDir::toNativeSeparators(QDir::cleanPath(dir_));
-    QProcess::startDetached(d + "\\Crumb.exe", {}, d);
+    QProcess::startDetached(d + "\\CrumbBrowser.exe", {}, d);
   }
   if (opt_.fromTemp) {
     // Мы во временной копии удалятора: после выхода стираем эту временную папку.

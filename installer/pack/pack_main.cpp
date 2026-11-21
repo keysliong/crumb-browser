@@ -27,7 +27,7 @@ std::string lower(std::string s) {
 // (Qt, QML, runtime Visual C++, сам crumb_setup.exe) помечается kFlagUi.
 bool isUiFile(const std::string& rel) {
   static const std::set<std::string> heavy = {
-      "crumb.exe", "crumb_helper.exe", "libcef.dll", "chrome_elf.dll", "dxcompiler.dll",
+      "crumbbrowser.exe", "crumb.exe", "crumb_helper.exe", "libcef.dll", "chrome_elf.dll", "dxcompiler.dll",
       "dxil.dll", "vk_swiftshader.dll", "vk_swiftshader_icd.json", "vulkan-1.dll",
       "v8_context_snapshot.bin", "icudtl.dat", "chrome_100_percent.pak",
       "chrome_200_percent.pak", "resources.pak"};

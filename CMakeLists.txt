@@ -3,7 +3,7 @@
 # cmake-скрипты CEF при Ninja обнуляют глобальные CMAKE_CXX_FLAGS).
 
 cmake_minimum_required(VERSION 3.24)
-project(Crumb VERSION 0.5.1 LANGUAGES C CXX)
+project(Crumb VERSION 0.5.2 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -118,7 +118,8 @@ target_link_libraries(crumb PRIVATE Qt6::Core Qt6::Gui Qt6::Quick Qt6::QuickCont
 crumb_use_cef(crumb)
 add_dependencies(crumb crumb_helper)
 set_target_properties(crumb PROPERTIES
-  OUTPUT_NAME "Crumb"
+  # Не «Crumb.exe»: под этим именем Discord узнаёт игру «Crumb Circuit Simulator».
+  OUTPUT_NAME "CrumbBrowser"
   RUNTIME_OUTPUT_DIRECTORY "${CRUMB_OUT_DIR}"
 )
 if(MSVC)
@@ -139,7 +140,7 @@ if(WIN32)
             --no-opengl-sw --qmldir "${CMAKE_SOURCE_DIR}/qml" --qmldir "${CMAKE_SOURCE_DIR}/ui/qml"
             "$<TARGET_FILE:crumb>"
     COMMAND ${CMAKE_COMMAND} -DOUT_DIR=${CRUMB_OUT_DIR} -P "${CMAKE_SOURCE_DIR}/cmake/TrimQtDeploy.cmake"
-    COMMENT "windeployqt: копируем Qt рядом с Crumb.exe"
+    COMMENT "windeployqt: копируем Qt рядом с CrumbBrowser.exe"
     VERBATIM)
 
   # Runtime Visual C++ (msvcp140, vcruntime140…) рядом с exe — чтобы Crumb

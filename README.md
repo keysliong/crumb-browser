@@ -1,4 +1,4 @@
-<div align="center">
+﻿<div align="center">
 
 <img src="docs/icon.png" width="128" alt="Crumb">
 
@@ -101,7 +101,7 @@ cmake --preset vs2022
 cmake --build --preset release --parallel
 ```
 
-Готовый браузер: `build\out\Release\Crumb.exe` (рядом — `crumb_helper.exe`, файлы CEF и Qt).
+Готовый браузер: `build\out\Release\CrumbBrowser.exe` (рядом — `crumb_helper.exe`, файлы CEF и Qt).
 
 #### Иконка
 
