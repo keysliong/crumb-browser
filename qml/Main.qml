@@ -255,9 +255,14 @@ Window {
         WindowEffects.roundCorners(win, true)
         if (CefRuntime.env("CRUMB_MEDIATEST").length) urlsForTest()
         const urls = CefRuntime.startupUrls()
-        const restored = Settings.startupMode === "restore" && !CefRuntime.env("CRUMB_MEDIATEST").length && restoreSession()
+        // Прошлый сеанс: «restore» — вернуть сразу, «ask» — спросить полоской сверху, «home» — не трогать.
+        const prev = CefRuntime.env("CRUMB_MEDIATEST").length ? null : readSession()
+        if (prev) closedTabs = prev.closed || []
+        const restoreNow = prev !== null && Settings.startupMode === "restore"
         if (urls.length > 0) urls.forEach(u => openUrl(u))
-        else if (!restored) newHomeTab()
+        else if (!restoreNow) newHomeTab()
+        if (restoreNow) restoreFrom(prev)
+        else if (prev !== null && Settings.startupMode === "ask") pendingSession = prev
         sessionReady = true
     }
     // Медиа-самотест: что умеет движок в защищённом контексте (https) —
@@ -582,11 +587,65 @@ Window {
             }
         }
 
+        // «Восстановить вкладки прошлого сеанса?» — спрашиваем, а не открываем сами.
+        Rectangle {
+            id: restoreBanner
+            readonly property int count: win.pendingSession ? win.pendingSession.tabs.filter(x => x.kind !== "home" && (x.kind !== "web" || x.url)).length : 0
+            anchors.top: defaultBanner.bottom
+            anchors.topMargin: defaultBanner.visible && visible ? 6 : 0
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.leftMargin: 8
+            anchors.rightMargin: 8
+            height: win.pendingSession ? 56 : 0
+            visible: height > 1
+            clip: true
+            radius: 18
+            color: Theme.primaryContainer
+            Behavior on height { enabled: Prefs.animations; SpringAnimation { spring: Prefs.spring(3); damping: 0.35 } }
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 12
+                anchors.rightMargin: 12
+                spacing: 12
+                CookieShape {
+                    Layout.preferredWidth: 32; Layout.preferredHeight: 32
+                    color: Theme.primary
+                    Text { anchors.centerIn: parent; text: "\uE7A7"; font.family: Theme.iconFont; font.pixelSize: 14; color: Theme.onPrimary }
+                }
+                CText {
+                    Layout.fillWidth: true
+                    text: qsTr("Восстановить вкладки прошлого сеанса? Вкладок: %1").arg(restoreBanner.count)
+                    color: Theme.onPrimaryContainer
+                    elide: Text.ElideRight
+                }
+                CookieButton {
+                    size: 32; variant: "surface"; icon: "\uE8FB"
+                    text: qsTr("Всегда")
+                    toolTip: qsTr("Восстанавливать вкладки при каждом запуске, не спрашивая")
+                    labelColor: Theme.onPrimaryContainer
+                    onClicked: { Settings.startupMode = "restore"; win.acceptRestore() }
+                }
+                CookieButton {
+                    size: 32; variant: "surface"; icon: "\uE711"
+                    text: qsTr("Не надо")
+                    labelColor: Theme.onPrimaryContainer
+                    onClicked: win.declineRestore()
+                }
+                CookieButton {
+                    size: 32; variant: "filled"; icon: "\uE73E"
+                    text: qsTr("Восстановить")
+                    labelColor: Theme.onPrimaryContainer
+                    onClicked: win.acceptRestore()
+                }
+            }
+        }
+
         // Страницы: по одной на вкладку, видна только текущая.
         Item {
             id: pageArea
-            anchors.top: defaultBanner.bottom
-            anchors.topMargin: defaultBanner.visible ? 6 : 0
+            anchors.top: restoreBanner.bottom
+            anchors.topMargin: defaultBanner.visible || restoreBanner.visible ? 6 : 0
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.bottom: parent.bottom
@@ -1117,30 +1176,79 @@ Window {
             const x = groups.get(k)
             g.push({ gid: x.gid, name: x.name, colorIndex: x.colorIndex, collapsed: x.collapsed })
         }
-        const s = JSON.stringify({ v: 1, current: currentIndex, tabs: t, groups: g, closed: closedTabs.slice(-15) })
+        const data = { v: 1, current: currentIndex, tabs: t, groups: g, closed: closedTabs.slice(-15) }
+        // Закрыли Crumb, не ответив «восстановить?», — предложим снова в следующий раз.
+        if (pendingSession) data.previous = pendingSession
+        const s = JSON.stringify(data)
         if (s !== Settings.sessionState) Settings.sessionState = s
     }
-    function restoreSession() {
+    // Прошлый сеанс, который стоит предложить: в нём есть хоть что-то, кроме пустых новых вкладок.
+    property var pendingSession: null
+    function meaningful(s) { return !!(s && s.tabs && s.tabs.some(x => x.kind !== "home" && (x.kind !== "web" || x.url))) }
+    function readSession() {
         let s = null
-        try { s = JSON.parse(Settings.sessionState || "null") } catch (e) { return false }
-        if (!s || !s.tabs || !s.tabs.length) return false
-        for (const g of (s.groups || [])) {
-            groups.append({ gid: g.gid, name: g.name, colorIndex: g.colorIndex, collapsed: !!g.collapsed })
-            nextGid = Math.max(nextGid, g.gid + 1)
+        try { s = JSON.parse(Settings.sessionState || "null") } catch (e) { return null }
+        if (meaningful(s)) return s
+        if (s && meaningful(s.previous)) return Object.assign({}, s.previous, { closed: s.closed || s.previous.closed })
+        return null
+    }
+    // Добавить вкладки сеанса s. Уже открытые (тот же адрес или та же страница Crumb) не дублируются.
+    function restoreFrom(s) {
+        if (!s || !s.tabs) return 0
+        const open = {}
+        for (let i = 0; i < tabs.count; ++i) {
+            const m = tabs.get(i), p = pageAt(i)
+            if (m.kind === "web") open[(p && p.currentUrl) || m.url] = true
+            else if (m.kind !== "home") open["kind:" + m.kind] = true
         }
+        // Пустая новая вкладка, с которой стартовали, после восстановления не нужна.
+        let blank = -1
+        if (tabs.count === 1 && tabs.get(0).kind === "home" && !tabs.get(0).webStarted) blank = 0
+        const gidMap = {}
+        const firstNew = tabs.count
         const cur = Math.max(0, Math.min(s.current || 0, s.tabs.length - 1))
+        let curNew = -1
         for (let i = 0; i < s.tabs.length; ++i) {
             const x = s.tabs[i]
             const web = x.kind === "web" && !!x.url
-            const kind = x.kind === "web" ? (web ? "web" : "home") : x.kind
+            if (x.kind === "home" || (x.kind === "web" && !web)) continue
+            const key = web ? x.url : "kind:" + x.kind
+            if (open[key]) continue
+            open[key] = true
+            let gid = -1
+            if (x.groupId >= 0) {
+                if (gidMap[x.groupId] === undefined) {
+                    const g = (s.groups || []).find(y => y.gid === x.groupId)
+                    if (g) {
+                        gidMap[x.groupId] = nextGid++
+                        groups.append({ gid: gidMap[x.groupId], name: g.name, colorIndex: g.colorIndex, collapsed: !!g.collapsed })
+                    } else gidMap[x.groupId] = -1
+                }
+                gid = gidMap[x.groupId]
+            }
+            if (i === cur || curNew < 0) curNew = tabs.count
             // Сайты загружаются, только когда вкладку откроют, — запуск остаётся быстрым.
-            tabs.append({ uid: nextUid++, kind: kind, url: web ? x.url : "", webStarted: web && i === cur,
-                          fromHome: false, groupId: groupExists(x.groupId) ? x.groupId : -1,
-                          lazy: web && i !== cur, savedTitle: x.title || "" })
+            tabs.append({ uid: nextUid++, kind: web ? "web" : x.kind, url: web ? x.url : "", webStarted: false,
+                          fromHome: false, groupId: gid, lazy: web, savedTitle: x.title || "" })
         }
-        closedTabs = s.closed || []
-        currentIndex = cur
-        return true
+        const added = tabs.count - firstNew
+        if (added > 0) {
+            if (blank >= 0) { tabs.remove(blank); curNew-- }
+            currentIndex = -1
+            currentIndex = curNew
+        }
+        return added
+    }
+    function acceptRestore() {
+        const s = pendingSession
+        pendingSession = null
+        const n = restoreFrom(s)
+        if (n === 0) toast.show(qsTr("Все вкладки прошлого сеанса уже открыты"))
+        scheduleSave()
+    }
+    function declineRestore() {
+        pendingSession = null
+        scheduleSave()
     }
     // Восстановленная вкладка: сайт начинает загружаться при первом открытии.
     function wake(i) {

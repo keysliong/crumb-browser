@@ -116,7 +116,7 @@ void SettingsStore::buildDefaults() {
       {"downloadsDir", QDir::toNativeSeparators(downloads)},
       {"downloadsAsk", false},
       // Запуск: restore — открыть вкладки прошлого сеанса, home — новая вкладка
-      {"startupMode", "restore"},
+      {"startupMode", "ask"},   // ask | restore | home
       {"sessionState", ""},      // вкладки и группы (JSON), пишет главное окно
       // История и пароли
       {"historyEnabled", true},

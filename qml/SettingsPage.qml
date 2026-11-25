@@ -864,9 +864,10 @@ Item {
                 title: qsTr("Вкладки"); icon: ""
                 SChoice {
                     label: qsTr("При запуске")
-                    hint: qsTr("Восстановленные вкладки загружаются, только когда вы их открываете")
+                    hint: qsTr("«Спрашивать» — сверху появится «Восстановить вкладки?». Уже открытые вкладки не дублируются, а сайты загружаются, только когда вы их открываете")
                     keywords: "восстановить вкладки сеанс запуск"
-                    options: [{ value: "restore", label: qsTr("Вернуть вкладки"), icon: "\uE7A7" },
+                    options: [{ value: "ask", label: qsTr("Спрашивать"), icon: "\uE897" },
+                              { value: "restore", label: qsTr("Вернуть вкладки"), icon: "\uE7A7" },
                               { value: "home", label: qsTr("Новая вкладка"), icon: "\uE80F" }]
                     current: Settings.startupMode
                     onChosen: (v) => Settings.startupMode = v
