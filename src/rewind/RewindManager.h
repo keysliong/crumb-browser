@@ -73,6 +73,7 @@ class RewindManager final : public QObject {
   void onPageLoaded(CefRefPtr<CefBrowser> browser);
   bool handleConsole(CefRefPtr<CefBrowser> browser, const QString& message);   // true — сообщение наше
   void onScreenshot(int messageId, bool ok, const QByteArray& json);
+  void captureWindow(const QString& token, quintptr hwnd);   // мини-скриншот окна вкладки (поток Qt)
   void onWatchBrowserCreated(CefRefPtr<CefBrowser> b);
   void onWatchBrowserClosed();
   void onWatchPageLoaded();
@@ -109,8 +110,6 @@ class RewindManager final : public QObject {
   struct Pending { CefRefPtr<CefBrowser> browser; QStringList parts; int got = 0; };
   QHash<QString, Pending> pending_;
   QHash<int, QString> shotToken_;                       // id метода DevTools → снимок
-  QHash<int, CefRefPtr<CefRegistration>> observers_;    // по id браузера
-  CefRefPtr<CefDevToolsMessageObserver> observer_;
 
   // поток Qt
   QHash<QString, qint64> tokenId_;

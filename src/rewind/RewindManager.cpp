@@ -190,7 +190,6 @@ RewindManager::RewindManager() {
   const QString dir = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation) + "/Crumb";
   QDir().mkpath(dir);
   store_.open(dir + "/rewind.db");
-  observer_ = new ShotObserver();
   loadSettings();
   connect(SettingsStore::instance(), &SettingsStore::settingChanged, this, [this](const QString& key) {
     if (key.startsWith("rewind")) loadSettings();
@@ -312,21 +311,46 @@ bool RewindManager::handleConsole(CefRefPtr<CefBrowser> browser, const QString& 
   }
   QMetaObject::invokeMethod(this, [this, token, payload] { ingest(token, payload); }, Qt::QueuedConnection);
 
-  // Мини-скриншот видимой части страницы (JPEG) через DevTools.
+  // Мини-скриншот видимой части страницы — снимком окна вкладки (PrintWindow).
+  // Раньше брали через DevTools (Page.captureScreenshot), но подключённый к вкладке
+  // отладчик выдаёт «управляемый браузер»: капчи Cloudflare Turnstile отказывали
+  // (client-error). Скрытая вкладка снимок не даёт — тогда снимок без картинки.
   if (b) {
-    const int bid = b->GetIdentifier();
-    {
-      std::lock_guard lock(mutex_);
-      if (!observers_.contains(bid)) observers_.insert(bid, b->GetHost()->AddDevToolsMessageObserver(observer_));
-    }
-    CefRefPtr<CefDictionaryValue> params = CefDictionaryValue::Create();
-    params->SetString("format", "jpeg");
-    params->SetInt("quality", 55);
-    const int msg = b->GetHost()->ExecuteDevToolsMethod(0, "Page.captureScreenshot", params);
-    std::lock_guard lock(mutex_);
-    if (msg > 0) shotToken_.insert(msg, token);
+    const quintptr hwnd = reinterpret_cast<quintptr>(b->GetHost()->GetWindowHandle());
+    QMetaObject::invokeMethod(this, [this, token, hwnd] { captureWindow(token, hwnd); }, Qt::QueuedConnection);
   }
   return true;
+}
+
+void RewindManager::captureWindow(const QString& token, quintptr hwndValue) {
+#if defined(_WIN32)
+  HWND hwnd = reinterpret_cast<HWND>(hwndValue);
+  if (!hwnd || !IsWindow(hwnd) || !IsWindowVisible(hwnd) || IsIconic(GetAncestor(hwnd, GA_ROOT))) return;
+  RECT r{};
+  GetClientRect(hwnd, &r);
+  const int w = r.right - r.left, h = r.bottom - r.top;
+  if (w < 50 || h < 50) return;
+  HDC screen = GetDC(nullptr);
+  HDC mem = CreateCompatibleDC(screen);
+  HBITMAP bmp = CreateCompatibleBitmap(screen, w, h);
+  HGDIOBJ old = SelectObject(mem, bmp);
+  const BOOL ok = PrintWindow(hwnd, mem, 2 /* PW_RENDERFULLCONTENT */);
+  SelectObject(mem, old);
+  QImage img = ok ? QImage::fromHBITMAP(bmp) : QImage();
+  DeleteObject(bmp);
+  DeleteDC(mem);
+  ReleaseDC(nullptr, screen);
+  if (img.isNull()) return;
+  img = img.scaledToWidth(360, Qt::SmoothTransformation);
+  QByteArray jpeg;
+  QBuffer buf(&jpeg);
+  buf.open(QIODevice::WriteOnly);
+  img.save(&buf, "JPEG", 72);
+  thumbArrived(token, jpeg);
+#else
+  Q_UNUSED(token);
+  Q_UNUSED(hwndValue);
+#endif
 }
 
 void RewindManager::onScreenshot(int messageId, bool ok, const QByteArray& json) {

@@ -762,6 +762,7 @@ Window {
                             onShortcutTriggered: (name) => win.action(name, pageItem.index)
                             onPageClosed: win.closeTab(pageItem.index)
                             onSystemPageBlocked: (u) => win.systemPage(u, pageItem.index, canGoBack)
+                            onExternalProtocolRequested: (u) => win.askExternal(u, bv)
                             onUrlChanged: {
                                 const k = win.internalKind(url)
                                 if (!k) return
@@ -1142,6 +1143,80 @@ Window {
     EyedropperWindow {
         id: eyedropper
         onPicked: (c) => Theme.customColor = c
+    }
+
+    // ======================================== ссылки на приложения (tg:// и т.п.)
+    readonly property var appNames: ({ tg: "Telegram", mailto: qsTr("почту"), steam: "Steam", discord: "Discord",
+                                       zoommtg: "Zoom", msteams: "Teams", spotify: "Spotify", skype: "Skype",
+                                       whatsapp: "WhatsApp", viber: "Viber", vk: "VK", yandexmusic: qsTr("Яндекс Музыку"),
+                                       ms_settings: qsTr("параметры Windows"), "ms-settings": qsTr("параметры Windows"),
+                                       magnet: qsTr("торрент-клиент"), tel: qsTr("звонок") })
+    function askExternal(url, view) {
+        const scheme = String(url).split(":")[0].toLowerCase()
+        const host = view ? History.hostOf(view.url) : ""
+        if ((Settings.externalAllowed || []).indexOf(host + "|" + scheme) >= 0) { Qt.openUrlExternally(url); return }
+        const a = toolbarAddress
+        extAsk.parent = a
+        extAsk.x = a.width - extAsk.width
+        extAsk.y = a.height + 8
+        extAsk.offer(url, scheme, host)
+    }
+    CookiePopup {
+        id: extAsk
+        width: 400
+        implicitWidth: 400
+        padding: 18
+        property string url
+        property string scheme
+        property string host
+        property bool remember: false
+        readonly property string app: win.appNames[scheme] || scheme
+        function offer(u, sch, h) { url = u; scheme = sch; host = h; remember = false; open() }
+        background: Rectangle { color: Theme.surfaceContainer; radius: 28; border.color: Theme.outlineVariant }
+        contentItem: ColumnLayout {
+            spacing: 12
+            RowLayout {
+                spacing: 12
+                CookieShape {
+                    width: 44; height: 44
+                    color: Theme.primaryContainer
+                    Text { anchors.centerIn: parent; text: "\uE8A7"; font.family: Theme.iconFont; font.pixelSize: 18; color: Theme.onPrimaryContainer }
+                }
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 0
+                    CText { text: qsTr("Открыть %1?").arg(extAsk.app); size: 17; font.weight: Font.DemiBold; Layout.fillWidth: true; elide: Text.ElideRight }
+                    CText {
+                        text: extAsk.host.length ? qsTr("Сайт %1 хочет открыть приложение").arg(extAsk.host) : qsTr("Ссылка открывает приложение на компьютере")
+                        size: 13; color: Theme.onSurfaceVariant; Layout.fillWidth: true; elide: Text.ElideRight
+                    }
+                }
+            }
+            CookieSwitch {
+                visible: extAsk.host.length > 0
+                Layout.fillWidth: true
+                text: qsTr("Всегда разрешать этому сайту")
+                checked: extAsk.remember
+                onToggled: (on) => extAsk.remember = on
+            }
+            RowLayout {
+                Layout.topMargin: 4
+                Item { Layout.fillWidth: true }
+                CookieButton { size: 34; variant: "surface"; icon: "\uE711"; text: qsTr("Отмена"); onClicked: extAsk.close() }
+                CookieButton {
+                    size: 34; variant: "filled"; icon: "\uE8A7"; text: qsTr("Открыть")
+                    onClicked: {
+                        if (extAsk.remember && extAsk.host.length) {
+                            const list = (Settings.externalAllowed || []).slice()
+                            list.push(extAsk.host + "|" + extAsk.scheme)
+                            Settings.externalAllowed = list
+                        }
+                        Qt.openUrlExternally(extAsk.url)
+                        extAsk.close()
+                    }
+                }
+            }
+        }
     }
 
     // ================================================= сеанс: вкладки

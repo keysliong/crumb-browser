@@ -295,8 +295,20 @@ bool isSystemUrl(const QString& u) {
 }  // namespace
 
 bool BrowserClient::OnBeforeBrowse(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame> frame, CefRefPtr<CefRequest> request,
-                                   bool, bool) {
+                                   bool user_gesture, bool) {
   const QString url = qs(request->GetURL());
+  // Ссылки на приложения (tg://resolve…, mailto:, steam://…). Chrome показывает для них
+  // своё окно «Открыть приложение?», но во встроенном Chromium оно не появляется —
+  // спрашиваем сами (окно Crumb) и открываем через Windows.
+  const QString scheme = url.section(':', 0, 0).toLower();
+  static const QStringList web = {"http", "https", "file", "data", "blob", "about", "javascript", "filesystem",
+                                  "ws", "wss", "chrome-extension", "devtools", "view-source", "chrome",
+                                  "chrome-untrusted", "chrome-search", "edge", "brave", "opera", "vivaldi"};
+  if (!scheme.isEmpty() && !web.contains(scheme)) {
+    if (frame->IsMain() || user_gesture)
+      toView([url](BrowserView* v) { emit v->externalProtocolRequested(url); });
+    return true;
+  }
   if (!isSystemUrl(url)) return false;
   if (frame->IsMain()) toView([url](BrowserView* v) { emit v->systemPageBlocked(url); });
   return true;   // отменить переход

@@ -106,6 +106,8 @@ class BrowserView : public QQuickItem {
   void findResult(int count, int active, bool finalUpdate);
   // Страница попыталась открыть системную страницу Chromium (chrome://…) — переход отменён.
   void systemPageBlocked(const QString& url);
+  // Ссылка на приложение (tg://, mailto:, zoommtg:// …) — спросить и открыть через Windows.
+  void externalProtocolRequested(const QString& url);
 
  protected:
   void componentComplete() override;

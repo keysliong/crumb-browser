@@ -123,6 +123,8 @@ void SettingsStore::buildDefaults() {
       {"passwordsOffer", true},
       {"passwordsAutofill", true},
       {"passwordsNever", QVariantList{}},
+      // Сайты, которым разрешено открывать приложения без вопроса: "host|scheme"
+      {"externalAllowed", QVariantList{}},
       // Предлагать сделать Crumb браузером по умолчанию
       {"askDefaultBrowser", true},
       // Диагностика: журнал ошибок страниц
