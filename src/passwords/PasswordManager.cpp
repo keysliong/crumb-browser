@@ -47,8 +47,14 @@ QString jsString(const QString& s) {
 
 // Скрипт в главном фрейме сайта. Ставится один раз на документ.
 const char* kCaptureJs = R"JS((function(){
-if (window.__crumbPw) return;
-const S = window.__crumbPw = {};
+// Страницы с капчей не трогаем: проверки Cloudflare/hCaptcha/reCAPTCHA ищут следы
+// чужих скриптов и из-за них могут отказать («client-error»).
+if (window._cf_chl_opt || document.querySelector('iframe[src*="challenges.cloudflare.com"],script[src*="challenges.cloudflare.com"],iframe[src*="hcaptcha.com"],script[src*="hcaptcha.com"],iframe[src*="/recaptcha/"],script[src*="/recaptcha/"],#challenge-form,#cf-chl-widget')) return;
+// Состояние — под Symbol и неперечисляемым: на странице не остаётся видимых глобальных имён.
+const KEY = Symbol.for('crumb.pw');
+if (window[KEY]) return;
+const S = {};
+Object.defineProperty(window, KEY, { value: S, enumerable: false, configurable: false, writable: false });
 const log = console.log.bind(console);
 let lastUser = '', sent = '', lastFocus = null, quiet = false;
 const TEXT = /^(text|email|tel|)$/;
@@ -210,7 +216,7 @@ QString PasswordManager::fillJs(int id) {
   u.addBindValue(now());
   u.addBindValue(id);
   u.exec();
-  return QStringLiteral("window.__crumbPw && window.__crumbPw.fill(%1, %2)").arg(jsString(user), jsString(pass));
+  return QStringLiteral("(function(s){ s && s.fill(%1, %2) })(window[Symbol.for('crumb.pw')])").arg(jsString(user), jsString(pass));
 }
 
 QString PasswordManager::check(const QString& url, const QString& username, const QString& password) const {

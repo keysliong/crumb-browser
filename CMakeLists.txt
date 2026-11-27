@@ -3,7 +3,7 @@
 # cmake-скрипты CEF при Ninja обнуляют глобальные CMAKE_CXX_FLAGS).
 
 cmake_minimum_required(VERSION 3.24)
-project(Crumb VERSION 0.5.5 LANGUAGES C CXX)
+project(Crumb VERSION 0.5.6 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

@@ -42,6 +42,9 @@ const char* kCaptureJs = R"JS(
   const send = (s) => console.log(s);
   try {
     if (document.querySelector('input[type=password]')) { send('CRUMB_RW:' + tok + ':skip'); return; }
+    // Страницы с капчей (Cloudflare, hCaptcha, reCAPTCHA) не трогаем: проверки ищут
+    // следы чужих скриптов и могут принять браузер за бота.
+    if (window._cf_chl_opt || document.querySelector('iframe[src*="challenges.cloudflare.com"],script[src*="challenges.cloudflare.com"],iframe[src*="hcaptcha.com"],script[src*="hcaptcha.com"],iframe[src*="/recaptcha/"],script[src*="/recaptcha/"],#challenge-form,#cf-chl-widget')) { send('CRUMB_RW:' + tok + ':skip'); return; }
     const text = (document.body ? document.body.innerText : '').slice(0, 400000);
     if (text.trim().length < 20) { send('CRUMB_RW:' + tok + ':skip'); return; }
     const doc = document.documentElement.cloneNode(true);
