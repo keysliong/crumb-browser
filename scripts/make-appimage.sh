@@ -35,7 +35,8 @@ done
 # 3. Библиотеки Qt: всё, от чего зависят программа, плагины и QML-модули.
 collect() {
   find "$APPDIR/usr/lib/crumb/CrumbBrowser" "$APPDIR/usr/plugins" "$APPDIR/usr/qml" -type f \( -name '*.so*' -o -name CrumbBrowser \) \
-    -exec env LD_LIBRARY_PATH="$QT_DIR/lib" ldd {} \; 2>/dev/null | grep -oP "$QT_DIR/lib/\S+" | sort -u
+    -exec env LD_LIBRARY_PATH="$QT_DIR/lib" ldd {} \; 2>/dev/null | grep -oP '=> \K/\S+' \
+    | xargs -r readlink -f | grep "^$(readlink -f "$QT_DIR")/lib/" | sort -u
 }
 for pass in 1 2; do
   for lib in $(collect); do cp -an "$lib" "$APPDIR/usr/lib/"; done
