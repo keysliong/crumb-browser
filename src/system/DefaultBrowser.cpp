@@ -3,6 +3,12 @@
 #include <QCoreApplication>
 #include <QDir>
 #include <QQmlEngine>
+#if !defined(_WIN32)
+#include <QFile>
+#include <QImage>
+#include <QProcess>
+#include <QStandardPaths>
+#endif
 
 #if defined(_WIN32)
 #include <windows.h>
@@ -86,6 +92,30 @@ void DefaultBrowser::registerBrowser() {
   setValue(L"Software\\RegisteredApplications", L"Crumb", caps);
 
   SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, nullptr, nullptr);
+#else
+  // Linux: ярлык ~/.local/share/applications/crumb.desktop и значок — для меню,
+  // панели задач и «браузера по умолчанию». В AppImage запускаем сам .AppImage.
+  const QString exe = qEnvironmentVariableIsSet("APPIMAGE") ? qEnvironmentVariable("APPIMAGE")
+                                                            : QCoreApplication::applicationFilePath();
+  const QString data = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation);
+  const QString iconDir = data + "/icons/hicolor/256x256/apps";
+  QDir().mkpath(iconDir);
+  if (!QFile::exists(iconDir + "/crumb.png")) QImage(":/crumb/icon.png").save(iconDir + "/crumb.png");
+  const QString desktop = QStringLiteral(
+      "[Desktop Entry]\nType=Application\nName=Crumb\nGenericName=Web Browser\nGenericName[ru]=Веб-браузер\n"
+      "Comment=Browser in Material You style\nComment[ru]=Браузер в стиле Material You\n"
+      "Exec=\"%1\" %U\nIcon=crumb\nTerminal=false\nStartupWMClass=crumb\nCategories=Network;WebBrowser;\n"
+      "MimeType=text/html;application/xhtml+xml;x-scheme-handler/http;x-scheme-handler/https;\n").arg(exe);
+  const QString appDir = data + "/applications";
+  QDir().mkpath(appDir);
+  QFile f(appDir + "/crumb.desktop");
+  const bool same = f.open(QIODevice::ReadOnly) && f.readAll() == desktop.toUtf8();
+  f.close();
+  if (!same && f.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+    f.write(desktop.toUtf8());
+    f.close();
+    QProcess::startDetached("update-desktop-database", {appDir});
+  }
 #endif
 }
 
@@ -95,6 +125,20 @@ void DefaultBrowser::recheck() {
   const std::wstring base = L"Software\\Microsoft\\Windows\\Shell\\Associations\\UrlAssociations\\";
   def = readValue(base + L"https\\UserChoice", L"ProgId") == kProgId &&
         readValue(base + L"http\\UserChoice", L"ProgId") == kProgId;
+#else
+  // xdg-settings — скрипт, отвечает не мгновенно: спрашиваем асинхронно.
+  auto* p = new QProcess(this);
+  connect(p, &QProcess::finished, this, [this, p] {
+    const bool d = QString::fromUtf8(p->readAllStandardOutput()).trimmed() == QLatin1String("crumb.desktop");
+    p->deleteLater();
+    if (d != isDefault_) {
+      isDefault_ = d;
+      emit changed();
+    }
+  });
+  connect(p, &QProcess::errorOccurred, p, &QObject::deleteLater);
+  p->start("xdg-settings", {"get", "default-web-browser"});
+  return;
 #endif
   if (def != isDefault_) {
     isDefault_ = def;
@@ -109,6 +153,12 @@ void DefaultBrowser::openSystemSettings() {
   const auto r = reinterpret_cast<INT_PTR>(ShellExecuteW(nullptr, L"open",
       L"ms-settings:defaultapps?registeredAppUser=Crumb", nullptr, nullptr, SW_SHOWNORMAL));
   if (r <= 32) ShellExecuteW(nullptr, L"open", L"ms-settings:defaultapps", nullptr, nullptr, SW_SHOWNORMAL);
+#else
+  // На Linux программе можно назначить себя самой — без окна настроек.
+  auto* p = new QProcess(this);
+  connect(p, &QProcess::finished, this, [this, p] { p->deleteLater(); recheck(); });
+  connect(p, &QProcess::errorOccurred, p, &QObject::deleteLater);
+  p->start("xdg-settings", {"set", "default-web-browser", "crumb.desktop"});
 #endif
 }
 

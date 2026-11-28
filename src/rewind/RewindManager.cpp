@@ -14,11 +14,13 @@
 #include <QAbstractNativeEventFilter>
 #include <QCoreApplication>
 #include <QTimer>
+#include <QProcess>
 #include <QUrl>
 #include <vector>
 
 #include "cef/CefRuntime.h"
 #include "cef/CefTask.h"
+#include "ui/NativeWindow.h"
 #include "include/cef_client.h"
 #include "include/cef_values.h"
 #include "storage/SettingsStore.h"
@@ -141,9 +143,7 @@ class WatchClient final : public CefClient, public CefLifeSpanHandler, public Ce
   CefRefPtr<CefDisplayHandler> GetDisplayHandler() override { return this; }
   void OnAfterCreated(CefRefPtr<CefBrowser> b) override {
     CefRuntime::instance()->browserCreated();
-#if defined(_WIN32)
-    ::ShowWindow(b->GetHost()->GetWindowHandle(), SW_HIDE);
-#endif
+    native::hide((quintptr)b->GetHost()->GetWindowHandle());
     RewindManager::instance()->onWatchBrowserCreated(b);
   }
   void OnBeforeClose(CefRefPtr<CefBrowser>) override {
@@ -625,9 +625,7 @@ void RewindManager::nextWatch() {
     } else if (!watchCreating_) {
       watchCreating_ = true;
       CefWindowInfo info;
-#if defined(_WIN32)
-      info.SetAsChild(reinterpret_cast<CefWindowHandle>(window_->winId()), CefRect(0, 0, 1280, 800));
-#endif
+      info.SetAsChild((CefWindowHandle)window_->winId(), CefRect(0, 0, 1280, 800));
       info.runtime_style = CEF_RUNTIME_STYLE_CHROME;
       CefBrowserSettings settings;
       CefBrowserHost::CreateBrowser(info, new WatchClient(), cs(currentWatchUrl_), settings, nullptr, nullptr);
@@ -740,7 +738,9 @@ void RewindManager::notify(const QString& title, const QString& body, const QStr
   wcsncpy_s(nid.szInfo, reinterpret_cast<const wchar_t*>(body.left(255).utf16()), _TRUNCATE);
   ::Shell_NotifyIconW(NIM_MODIFY, &nid);
 #else
-  Q_UNUSED(title) Q_UNUSED(body) Q_UNUSED(url)
+  // Linux: уведомление рабочего стола (KDE, GNOME и др.) через notify-send.
+  Q_UNUSED(url)
+  QProcess::startDetached("notify-send", {"--app-name=Crumb", "--icon=crumb", title, body});
 #endif
 }
 

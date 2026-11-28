@@ -93,7 +93,14 @@ bool verify(void* hwnd, const std::wstring& message) {
 }  // namespace crumb::winverify
 
 #else
+#include <cstdlib>
+
 namespace crumb::winverify {
-bool verify(void*, const std::wstring&) { return true; }
+// Linux: системный запрос пароля (polkit, как при установке программ). Без pkexec
+// (минимальные системы) — не мешаем пользователю: пароли и так зашифрованы.
+bool verify(void*, const std::wstring&) {
+  if (std::system("command -v pkexec >/dev/null 2>&1") != 0) return true;
+  return std::system("pkexec /bin/true >/dev/null 2>&1") == 0;
+}
 }  // namespace crumb::winverify
 #endif

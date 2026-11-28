@@ -188,7 +188,16 @@ void DownloadManager::showInFolder(int uid) {
   if (r < 0) return;
   const QString p = QDir::toNativeSeparators(items_[r].info.path);
   if (QFileInfo::exists(p)) {
+#if defined(_WIN32)
     QProcess::startDetached("explorer.exe", {"/select,", p});
+#else
+    // Файловый менеджер с выделенным файлом (Dolphin, Nautilus…); если нет — просто папка.
+    const QString uri = QUrl::fromLocalFile(items_[r].info.path).toString(QUrl::FullyEncoded);
+    if (!QProcess::startDetached("dbus-send", {"--session", "--dest=org.freedesktop.FileManager1", "--type=method_call",
+                                               "/org/freedesktop/FileManager1", "org.freedesktop.FileManager1.ShowItems",
+                                               "array:string:" + uri, "string:"}))
+      QDesktopServices::openUrl(QUrl::fromLocalFile(QFileInfo(p).absolutePath()));
+#endif
   } else {
     QDesktopServices::openUrl(QUrl::fromLocalFile(QFileInfo(p).absolutePath()));
   }

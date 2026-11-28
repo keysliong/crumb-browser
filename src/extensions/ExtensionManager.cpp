@@ -12,6 +12,7 @@
 
 #include "cef/CefRuntime.h"
 #include "cef/CefTask.h"
+#include "ui/NativeWindow.h"
 #include "include/cef_client.h"
 #include "include/cef_values.h"
 
@@ -71,9 +72,7 @@ class BridgeClient final : public CefClient, public CefLifeSpanHandler, public C
 
   void OnAfterCreated(CefRefPtr<CefBrowser> b) override {
     CefRuntime::instance()->browserCreated();
-#if defined(_WIN32)
-    ::ShowWindow(b->GetHost()->GetWindowHandle(), SW_HIDE);   // мост невидим
-#endif
+    native::hide((quintptr)b->GetHost()->GetWindowHandle());   // мост невидим
     ExtensionManager::instance()->onBridgeCreated(b);
   }
   void OnBeforeClose(CefRefPtr<CefBrowser>) override {
@@ -145,9 +144,7 @@ void ExtensionManager::start(QWindow* window) {
   if (bridge_ || starting_ || !window || !CefRuntime::instance()->ready()) return;
   starting_ = true;
   CefWindowInfo info;
-#if defined(_WIN32)
-  info.SetAsChild(reinterpret_cast<CefWindowHandle>(window->winId()), CefRect(0, 0, 1, 1));
-#endif
+  info.SetAsChild((CefWindowHandle)window->winId(), CefRect(0, 0, 1, 1));
   info.runtime_style = CEF_RUNTIME_STYLE_CHROME;
   CefBrowserSettings settings;
   CefBrowserHost::CreateBrowser(info, new BridgeClient(), "chrome://extensions/", settings, nullptr, nullptr);

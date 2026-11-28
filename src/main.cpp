@@ -19,6 +19,7 @@
 #include "passwords/PasswordManager.h"
 #include "downloads/FileIconProvider.h"
 #include "ui/Eyedropper.h"
+#include "ui/NativeWindow.h"
 
 // Статический QML-модуль Crumb.Ui (тема, печеньки).
 Q_IMPORT_QML_PLUGIN(Crumb_UiPlugin)
@@ -81,6 +82,13 @@ int main(int argc, char* argv[]) {
   // перезапустит основной exe с --type=…, отрабатываем это здесь и выходим.
   if (const int code = CefExecuteProcess(mainArgs, cefApp, nullptr); code >= 0) return code;
 
+#if defined(__linux__)
+  // Окна Chromium встраиваются через X11: Qt тоже должен работать через X11
+  // (на Wayland — XWayland). Переменная окружения пользователя важнее.
+  if (!qEnvironmentVariableIsSet("QT_QPA_PLATFORM")) qputenv("QT_QPA_PLATFORM", "xcb");
+  crumb::native::installXErrorHandlers();
+  QGuiApplication::setDesktopFileName(QStringLiteral("crumb"));
+#endif
   QGuiApplication::setApplicationName(QStringLiteral("Crumb"));
   QGuiApplication::setApplicationDisplayName(QStringLiteral("Crumb"));
   QGuiApplication::setApplicationVersion(QStringLiteral(CRUMB_VERSION));

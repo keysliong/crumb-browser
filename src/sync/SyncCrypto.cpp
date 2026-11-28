@@ -1,5 +1,13 @@
 #include "sync/SyncCrypto.h"
 
+#if !defined(_WIN32)
+#include <QDir>
+#include <QFile>
+#include <QStandardPaths>
+#include <openssl/evp.h>
+#include <openssl/rand.h>
+#endif
+
 #if defined(_WIN32)
 #include <windows.h>
 #include <bcrypt.h>
@@ -102,13 +110,101 @@ QByteArray unprotect(const QByteArray& data) {
   return r;
 }
 #else
-// TODO(Linux, этап 9): OpenSSL/libsecret.
-QByteArray randomBytes(int) { return {}; }
-QByteArray deriveKey(const QByteArray&, const QByteArray&, int) { return {}; }
-QByteArray seal(const QByteArray&, const QByteArray&) { return {}; }
-QByteArray open(const QByteArray&, const QByteArray&, bool* ok) { if (ok) *ok = false; return {}; }
-QByteArray protect(const QByteArray& d) { return d; }
-QByteArray unprotect(const QByteArray& d) { return d; }
+// Linux: OpenSSL. Формат тот же, что на Windows (PBKDF2-SHA256, AES-256-GCM iv|ct|tag),
+// поэтому синхронизация между Windows и Linux совместима.
+namespace {
+constexpr int kIv = 12, kTag = 16;
+
+// Замена DPAPI: случайный ключ пользователя в файле, доступном только ему (0600).
+QByteArray masterKey() {
+  static QByteArray key;
+  if (!key.isEmpty()) return key;
+  const QString dir = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation) + "/Crumb";
+  QDir().mkpath(dir);
+  QFile f(dir + "/.crumb-key");
+  if (f.open(QIODevice::ReadOnly)) key = f.readAll();
+  if (key.size() != 32) {
+    key = randomBytes(32);
+    if (f.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+      f.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner);
+      f.write(key);
+    }
+  }
+  return key;
+}
+}  // namespace
+
+QByteArray randomBytes(int n) {
+  QByteArray out(n, Qt::Uninitialized);
+  if (RAND_bytes(reinterpret_cast<unsigned char*>(out.data()), n) != 1) return {};
+  return out;
+}
+
+QByteArray deriveKey(const QByteArray& pass, const QByteArray& salt, int iterations) {
+  QByteArray key(32, 0);
+  if (PKCS5_PBKDF2_HMAC(pass.constData(), int(pass.size()), reinterpret_cast<const unsigned char*>(salt.constData()),
+                        int(salt.size()), iterations, EVP_sha256(), 32, reinterpret_cast<unsigned char*>(key.data())) != 1)
+    return {};
+  return key;
+}
+
+QByteArray seal(const QByteArray& key, const QByteArray& plain) {
+  if (key.size() != 32) return {};
+  QByteArray iv = randomBytes(kIv), tag(kTag, 0), ct(plain.size() + 16, Qt::Uninitialized);
+  EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
+  int len = 0, total = 0;
+  bool ok = ctx && EVP_EncryptInit_ex(ctx, EVP_aes_256_gcm(), nullptr, nullptr, nullptr) == 1 &&
+            EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, kIv, nullptr) == 1 &&
+            EVP_EncryptInit_ex(ctx, nullptr, nullptr, reinterpret_cast<const unsigned char*>(key.constData()),
+                               reinterpret_cast<const unsigned char*>(iv.constData())) == 1 &&
+            EVP_EncryptUpdate(ctx, reinterpret_cast<unsigned char*>(ct.data()), &len,
+                              reinterpret_cast<const unsigned char*>(plain.constData()), int(plain.size())) == 1;
+  total = len;
+  ok = ok && EVP_EncryptFinal_ex(ctx, reinterpret_cast<unsigned char*>(ct.data()) + total, &len) == 1;
+  total += len;
+  ok = ok && EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_GET_TAG, kTag, tag.data()) == 1;
+  EVP_CIPHER_CTX_free(ctx);
+  if (!ok) return {};
+  ct.resize(total);
+  return iv + ct + tag;
+}
+
+QByteArray open(const QByteArray& key, const QByteArray& sealed, bool* ok) {
+  if (ok) *ok = false;
+  if (key.size() != 32 || sealed.size() < kIv + kTag) return {};
+  const QByteArray iv = sealed.left(kIv), tag = sealed.right(kTag);
+  const QByteArray ct = sealed.mid(kIv, sealed.size() - kIv - kTag);
+  QByteArray plain(ct.size() + 16, Qt::Uninitialized);
+  EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
+  int len = 0, total = 0;
+  bool good = ctx && EVP_DecryptInit_ex(ctx, EVP_aes_256_gcm(), nullptr, nullptr, nullptr) == 1 &&
+              EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, kIv, nullptr) == 1 &&
+              EVP_DecryptInit_ex(ctx, nullptr, nullptr, reinterpret_cast<const unsigned char*>(key.constData()),
+                                 reinterpret_cast<const unsigned char*>(iv.constData())) == 1 &&
+              EVP_DecryptUpdate(ctx, reinterpret_cast<unsigned char*>(plain.data()), &len,
+                                reinterpret_cast<const unsigned char*>(ct.constData()), int(ct.size())) == 1;
+  total = len;
+  good = good && EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_TAG, kTag, const_cast<char*>(tag.constData())) == 1 &&
+         EVP_DecryptFinal_ex(ctx, reinterpret_cast<unsigned char*>(plain.data()) + total, &len) == 1;
+  total += len;
+  EVP_CIPHER_CTX_free(ctx);
+  if (!good) return {};
+  plain.resize(total);
+  if (ok) *ok = true;
+  return plain;
+}
+
+QByteArray protect(const QByteArray& data) {
+  const QByteArray s = seal(masterKey(), data);
+  return s.isEmpty() ? QByteArray() : QByteArrayLiteral("CRB1") + s;
+}
+
+QByteArray unprotect(const QByteArray& data) {
+  if (!data.startsWith("CRB1")) return {};
+  bool ok = false;
+  const QByteArray plain = open(masterKey(), data.mid(4), &ok);
+  return ok ? plain : QByteArray();
+}
 #endif
 
 }  // namespace crumb::crypto

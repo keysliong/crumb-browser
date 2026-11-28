@@ -9,6 +9,7 @@
 #include "cef/BrowserClient.h"
 #include "cef/CefRuntime.h"
 #include "history/HistoryManager.h"
+#include "ui/NativeWindow.h"
 #include "ui/UrlUtil.h"
 
 #if defined(_WIN32)
@@ -56,13 +57,8 @@ void BrowserView::tryCreate() {
 
   const QRect r = physicalRect();
   CefWindowInfo info;
-#if defined(_WIN32)
-  info.SetAsChild(reinterpret_cast<CefWindowHandle>(window()->winId()),
+  info.SetAsChild((CefWindowHandle)window()->winId(),
                   CefRect(r.x(), r.y(), std::max(1, r.width()), std::max(1, r.height())));
-#else
-  info.SetAsChild(static_cast<CefWindowHandle>(window()->winId()),
-                  CefRect(r.x(), r.y(), std::max(1, r.width()), std::max(1, r.height())));
-#endif
   // Chrome style: полноценный Chromium — расширения, Web Store, менеджер паролей.
   info.runtime_style = CEF_RUNTIME_STYLE_CHROME;
 
@@ -204,21 +200,15 @@ void BrowserView::syncGeometry() {
   const QRect r = physicalRect();
   if (r == lastRect_) return;
   lastRect_ = r;
-#if defined(_WIN32)
-  // Окно браузера принадлежит UI-потоку CEF: асинхронный SetWindowPos не ждёт его.
-  ::SetWindowPos(reinterpret_cast<HWND>(hwnd_), nullptr, r.x(), r.y(), r.width(), r.height(),
-                 SWP_NOZORDER | SWP_NOACTIVATE | SWP_ASYNCWINDOWPOS);
-#else
-  // Linux (X11): перемещение окна добавим при портировании.
+  native::moveResize(hwnd_, r);
+#if !defined(_WIN32)
   if (browser_) browser_->GetHost()->WasResized();
 #endif
 }
 
 void BrowserView::syncVisibility() {
   if (!hwnd_) return;
-#if defined(_WIN32)
-  ::ShowWindowAsync(reinterpret_cast<HWND>(hwnd_), isVisible() ? SW_SHOWNA : SW_HIDE);
-#endif
+  native::setVisible(hwnd_, isVisible());
   if (browser_) browser_->GetHost()->WasHidden(!isVisible());
 }
 

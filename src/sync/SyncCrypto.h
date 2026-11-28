@@ -1,5 +1,5 @@
 #pragma once
-// Криптография для синхронизации на Windows CNG (bcrypt) и DPAPI — без сторонних библиотек.
+// Криптография: Windows — CNG (bcrypt) и DPAPI; Linux — OpenSSL и ключ пользователя в файле 0600.
 
 #include <QByteArray>
 

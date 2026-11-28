@@ -1,0 +1,122 @@
+# Linux-сборка Crumb: AppImage для CachyOS, Arch, Ubuntu, Fedora и других.
+# Каждый пуш в main — сборка + проверочный запуск (снимок окна в артефактах).
+# Тег vX.Y.Z — то же самое, и AppImage прикладывается к релизу на GitHub.
+name: Linux
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Приложить AppImage к релизу (тег, например v0.6.0). Пусто — только артефакт.'
+        required: false
+
+permissions:
+  contents: write
+
+env:
+  QT_VERSION: 6.10.3
+  CEF_VERSION: 149.0.4+g2f1bfd8+chromium-149.0.7827.156
+  CEF_SHA1: a498a769bdef11a38da94a2dab4f08879fee0c90
+
+jobs:
+  appimage:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Системные пакеты
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake ninja-build pkg-config file curl \
+            libx11-dev libssl-dev libgl1-mesa-dev libegl1-mesa-dev libxkbcommon-dev libxkbcommon-x11-0 \
+            libfontconfig1-dev libfreetype-dev libdbus-1-3 \
+            libxcb1 libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 \
+            libxcb-render-util0 libxcb-shape0 libxcb-xinerama0 libxcb-xkb1 libxcb-xfixes0 libx11-xcb1 \
+            libnss3 libatk1.0-0t64 libatk-bridge2.0-0t64 libcups2t64 libdrm2 libgbm1 libasound2t64 \
+            libxcomposite1 libxdamage1 libxrandr2 libxshmfence1 libpango-1.0-0 libcairo2 \
+            xvfb xauth imagemagick libfuse2t64
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Кэш Qt
+        id: qtcache
+        uses: actions/cache@v4
+        with:
+          path: ~/Qt
+          key: qt-${{ env.QT_VERSION }}-linux-gcc64-v1
+
+      - name: Qt
+        if: steps.qtcache.outputs.cache-hit != 'true'
+        run: |
+          pip install aqtinstall
+          aqt install-qt linux desktop ${{ env.QT_VERSION }} linux_gcc_64 -m qtshadertools qtimageformats qtmultimedia -O ~/Qt
+
+      - name: Кэш CEF
+        id: cefcache
+        uses: actions/cache@v4
+        with:
+          path: third_party/cef
+          key: cef-${{ env.CEF_VERSION }}-linux64
+
+      - name: CEF
+        if: steps.cefcache.outputs.cache-hit != 'true'
+        run: |
+          name="cef_binary_${CEF_VERSION}_linux64_minimal"
+          url="https://cef-builds.spotifycdn.com/$(python3 -c "import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1]))" "$name.tar.bz2")"
+          curl -fL -o cef.tar.bz2 "$url"
+          echo "$CEF_SHA1  cef.tar.bz2" | sha1sum -c -
+          mkdir -p third_party
+          tar -xjf cef.tar.bz2 -C third_party
+          mv "third_party/$name" third_party/cef
+          rm cef.tar.bz2
+
+      - name: Сборка
+        run: |
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_PREFIX_PATH="$HOME/Qt/${QT_VERSION}/gcc_64" -DCEF_ROOT="$PWD/third_party/cef"
+          cmake --build build --target crumb --parallel
+          ls -la build/out/Release
+
+      - name: AppImage
+        run: |
+          QT_DIR="$HOME/Qt/${QT_VERSION}/gcc_64" bash scripts/make-appimage.sh
+          ls -la build/*.AppImage
+
+      - name: Проверочный запуск (виртуальный экран)
+        run: |
+          export CRUMB_DEMO=1
+          xvfb-run -a -s "-screen 0 1440x900x24" bash -c '
+            build/AppDir/AppRun https://example.com/ > run.log 2>&1 &
+            pid=$!
+            sleep 35
+            import -window root shot.png || true
+            kill $pid 2>/dev/null || true
+            sleep 3
+          '
+          tail -n 80 run.log || true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: crumb-linux
+          path: |
+            build/*.AppImage
+            shot.png
+            run.log
+          if-no-files-found: warn
+
+      - name: Приложить к релизу
+        if: startsWith(github.ref, 'refs/tags/v') || github.event.inputs.release_tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.inputs.release_tag || github.ref_name }}
+        run: |
+          # Релиз создаётся вместе с тегом — подождём, если он ещё не появился.
+          for i in $(seq 1 30); do gh release view "$TAG" >/dev/null 2>&1 && break; sleep 10; done
+          gh release upload "$TAG" build/*.AppImage --clobber

@@ -4,6 +4,7 @@
 
 #include "cef/CefRuntime.h"
 #include "cef/CefTask.h"
+#include "ui/NativeWindow.h"
 
 #if defined(_WIN32)
 #include <windows.h>
@@ -25,9 +26,7 @@ class StrayClient final : public CefClient, public CefLifeSpanHandler, public Ce
   void OnAfterCreated(CefRefPtr<CefBrowser> browser) override {
     // Учитываем в счётчике, чтобы выход дождался их закрытия.
     CefRuntime::instance()->browserCreated();
-#if defined(_WIN32)
-    ::ShowWindow(browser->GetHost()->GetWindowHandle(), SW_HIDE);
-#endif
+    native::hide((quintptr)browser->GetHost()->GetWindowHandle());
     // Если адреса так и не появится (пустое окно) — закрываем через пару секунд.
     CefRefPtr<CefBrowser> b = browser;
     CefPostDelayedTask(TID_UI, new FunctionTask([b] { b->GetHost()->CloseBrowser(true); }), 3000);
@@ -63,6 +62,12 @@ void CrumbCefApp::OnBeforeCommandLineProcessing(const CefString& process_type,
   // Звук и видео могут стартовать без жеста пользователя: плееры (Яндекс Музыка и
   // т.п.) сами переключают треки и запускают воспроизведение из скриптов.
   command_line->AppendSwitchWithValue("autoplay-policy", "no-user-gesture-required");
+#if defined(__linux__)
+  // Окна страниц встраиваются в окно Crumb через X11 (на Wayland — XWayland).
+  command_line->AppendSwitchWithValue("ozone-platform", "x11");
+  // Пароли хранит сам Crumb; не трогать KWallet/GNOME Keyring.
+  command_line->AppendSwitchWithValue("password-store", "basic");
+#endif
 }
 
 void CrumbCefApp::OnContextInitialized() {

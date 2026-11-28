@@ -4,6 +4,11 @@
 #include <QFileInfo>
 #include <QImage>
 #include <QUrl>
+#if !defined(_WIN32)
+#include <QIcon>
+#include <QMimeDatabase>
+#include <QPixmap>
+#endif
 
 #if defined(_WIN32)
 #include <windows.h>
@@ -34,6 +39,12 @@ QImage FileIconProvider::requestImage(const QString& id, QSize* size, const QSiz
       list->Release();
     }
   }
+#else
+  // Значок из темы рабочего стола по типу файла (Breeze, Adwaita, Papirus…).
+  QMimeDatabase db;
+  const QMimeType mt = QFileInfo::exists(path) ? db.mimeTypeForFile(path) : db.mimeTypeForFile(path, QMimeDatabase::MatchExtension);
+  const QIcon icon = QIcon::fromTheme(mt.iconName(), QIcon::fromTheme(mt.genericIconName(), QIcon::fromTheme("text-x-generic")));
+  if (!icon.isNull()) img = icon.pixmap(48, 48).toImage();
 #endif
   if (img.isNull()) {
     img = QImage(48, 48, QImage::Format_ARGB32);

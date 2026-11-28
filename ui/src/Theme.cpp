@@ -18,6 +18,11 @@
 #if defined(_WIN32)
 #include <windows.h>
 #include <dwmapi.h>
+#else
+#include <QDir>
+#include <QFile>
+#include <QProcess>
+#include <QUrl>
 #endif
 
 namespace crumb {
@@ -28,8 +33,42 @@ QString wallpaperFile() {
 #if defined(_WIN32)
   wchar_t buf[MAX_PATH] = {};
   if (SystemParametersInfoW(SPI_GETDESKWALLPAPER, MAX_PATH, buf, 0)) return QString::fromWCharArray(buf);
-#endif
   return {};
+#else
+  auto toPath = [](QString v) {
+    v = v.trimmed();
+    if (v.startsWith('\'') && v.endsWith('\'')) v = v.mid(1, v.size() - 2);
+    if (v.startsWith("file://")) v = QUrl(v).toLocalFile();
+    return v;
+  };
+  // KDE Plasma (CachyOS, Kubuntu, Fedora KDE…)
+  QFile kde(QDir::homePath() + "/.config/plasma-org.kde.plasma.desktop-appletsrc");
+  if (kde.open(QIODevice::ReadOnly | QIODevice::Text)) {
+    while (!kde.atEnd()) {
+      const QString line = QString::fromUtf8(kde.readLine()).trimmed();
+      if (line.startsWith("Image=")) {
+        QString p = toPath(line.mid(6));
+        // Папка темы обоев Plasma: берём картинку из contents/images
+        if (QFileInfo(p).isDir()) {
+          const QStringList imgs = QDir(p + "/contents/images").entryList({"*.png", "*.jpg", "*.jpeg", "*.webp"},
+                                                                          QDir::Files, QDir::Name);
+          if (!imgs.isEmpty()) p = p + "/contents/images/" + imgs.last();
+        }
+        if (QFileInfo(p).isFile()) return p;
+      }
+    }
+  }
+  // GNOME и производные
+  for (const char* key : {"picture-uri-dark", "picture-uri"}) {
+    QProcess g;
+    g.start("gsettings", {"get", "org.gnome.desktop.background", key});
+    if (g.waitForFinished(1500)) {
+      const QString p = toPath(QString::fromUtf8(g.readAllStandardOutput()));
+      if (QFileInfo(p).isFile()) return p;
+    }
+  }
+  return {};
+#endif
 }
 
 QColor solidBackgroundColor() {

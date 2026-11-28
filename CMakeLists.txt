@@ -33,6 +33,15 @@ set(USE_ATL OFF CACHE BOOL "" FORCE)
 
 list(APPEND CMAKE_MODULE_PATH "${CEF_ROOT}/cmake")
 find_package(CEF REQUIRED)
+if(NOT WIN32)
+  # Linux: обёртку CEF собираем с RTTI и исключениями (как наш код и Qt), иначе
+  # наследники CefClient и т.п. не слинкуются; -Werror — чтобы новые GCC не мешали.
+  foreach(_v CEF_COMPILER_FLAGS CEF_CXX_COMPILER_FLAGS CEF_COMPILER_FLAGS_RELEASE CEF_CXX_COMPILER_FLAGS_RELEASE)
+    if(DEFINED ${_v})
+      list(REMOVE_ITEM ${_v} -fno-rtti -fno-exceptions -Werror)
+    endif()
+  endforeach()
+endif()
 add_subdirectory(${CEF_LIBCEF_DLL_WRAPPER_PATH} libcef_dll_wrapper)
 ADD_LOGICAL_TARGET("libcef_lib" "${CEF_LIB_RELEASE}" "${CEF_LIB_RELEASE}")
 
@@ -51,7 +60,10 @@ set(CRUMB_OUT_DIR "${CMAKE_BINARY_DIR}/out/$<CONFIG>")
 
 # ----------------------------------------------------- вспомогательный процесс
 # Отдельный маленький exe без Qt для рендерера/GPU/сети — быстрее стартует.
-add_executable(crumb_helper WIN32 src/helper/helper_main.cpp resources/crumb.manifest resources/crumb.rc)
+if(WIN32)
+  set(CRUMB_WIN_RESOURCES resources/crumb.manifest resources/crumb.rc)
+endif()
+add_executable(crumb_helper WIN32 src/helper/helper_main.cpp ${CRUMB_WIN_RESOURCES})
 crumb_use_cef(crumb_helper)
 set_target_properties(crumb_helper PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CRUMB_OUT_DIR}")
 
@@ -71,6 +83,7 @@ qt_add_executable(crumb WIN32
   src/ui/BrowserView.h        src/ui/BrowserView.cpp
   src/ui/UrlUtil.h            src/ui/UrlUtil.cpp
   src/ui/Eyedropper.h         src/ui/Eyedropper.cpp
+  src/ui/NativeWindow.h       src/ui/NativeWindow.cpp
   src/storage/SettingsStore.h src/storage/SettingsStore.cpp
   src/home/Weather.h          src/home/Weather.cpp
   src/downloads/DownloadManager.h   src/downloads/DownloadManager.cpp
@@ -84,8 +97,7 @@ qt_add_executable(crumb WIN32
   src/history/HistoryManager.h      src/history/HistoryManager.cpp
   src/passwords/PasswordManager.h   src/passwords/PasswordManager.cpp
   src/passwords/WinVerify.h         src/passwords/WinVerify.cpp
-  resources/crumb.manifest
-  resources/crumb.rc
+  ${CRUMB_WIN_RESOURCES}
 )
 
 set_source_files_properties(qml/Engines.qml qml/Gradients.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
@@ -117,6 +129,13 @@ target_compile_definitions(crumb PRIVATE CRUMB_VERSION="${PROJECT_VERSION}")
 target_link_libraries(crumb PRIVATE Qt6::Core Qt6::Gui Qt6::Quick Qt6::QuickControls2 Qt6::Sql Qt6::Network crumb_ui crumb_uiplugin)
 crumb_use_cef(crumb)
 add_dependencies(crumb crumb_helper)
+if(UNIX AND NOT APPLE)
+  # Linux: шифрование — OpenSSL, окна страниц — X11; libcef.so лежит рядом с программой.
+  find_package(OpenSSL REQUIRED)
+  find_package(X11 REQUIRED)
+  target_link_libraries(crumb PRIVATE OpenSSL::Crypto X11::X11)
+  set_target_properties(crumb crumb_helper PROPERTIES BUILD_RPATH "$ORIGIN" INSTALL_RPATH "$ORIGIN")
+endif()
 set_target_properties(crumb PROPERTIES
   # Не «Crumb.exe»: под этим именем Discord узнаёт игру «Crumb Circuit Simulator».
   OUTPUT_NAME "CrumbBrowser"
@@ -158,5 +177,7 @@ endif()
 # Генератор иконки (SVG → .ico/.png)
 add_subdirectory(tools/icongen)
 
-# Установщик и удалятор
-add_subdirectory(installer)
+# Установщик и удалятор (на Linux вместо них — AppImage, scripts/make-appimage.sh)
+if(WIN32)
+  add_subdirectory(installer)
+endif()
