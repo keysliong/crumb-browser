@@ -43,6 +43,15 @@ done
 # Qt ищет ICU рядом с собой
 cp -an "$QT_DIR"/lib/libicu*.so* "$APPDIR/usr/lib/" 2>/dev/null || true
 
+# Небольшие системные библиотеки X11/xcb, без которых не запускается Qt (на многих
+# системах их нет по умолчанию: xcb-util-cursor, xcb-util-wm, xkbcommon-x11…).
+for so in "$APPDIR"/usr/plugins/platforms/libqxcb.so "$APPDIR"/usr/lib/libQt6XcbQpa.so*; do
+  [ -e "$so" ] || continue
+  env LD_LIBRARY_PATH="$APPDIR/usr/lib" ldd "$so" 2>/dev/null \
+    | grep -oP '=> \K/\S+(libxcb-(cursor|icccm|image|keysyms|render-util|util|xinput|xkb)|libxkbcommon-x11)\S*' \
+    | sort -u | while read -r lib; do cp -anL "$lib" "$APPDIR/usr/lib/"; done
+done
+
 # 4. Запуск, ярлык, значок.
 cat > "$APPDIR/AppRun" <<'EOF'
 #!/bin/sh

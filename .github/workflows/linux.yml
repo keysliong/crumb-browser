@@ -36,6 +36,7 @@ jobs:
             libfontconfig1-dev libfreetype-dev libdbus-1-3 \
             libxcb1 libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 \
             libxcb-render-util0 libxcb-shape0 libxcb-xinerama0 libxcb-xkb1 libxcb-xfixes0 libx11-xcb1 \
+            libxcb-xinput0 libxcb-util1 libxcb-shm0 libxcb-sync1 libxcb-glx0 \
             libnss3 libatk1.0-0t64 libatk-bridge2.0-0t64 libcups2t64 libdrm2 libgbm1 libasound2t64 \
             libxcomposite1 libxdamage1 libxrandr2 libxshmfence1 libpango-1.0-0 libcairo2 \
             xvfb xauth imagemagick libfuse2t64
@@ -90,7 +91,9 @@ jobs:
 
       - name: Проверочный запуск (виртуальный экран)
         run: |
-          export CRUMB_DEMO=1
+          export CRUMB_DEMO=1 QT_DEBUG_PLUGINS=1
+          echo "--- нет библиотек у модуля xcb:"; LD_LIBRARY_PATH=build/AppDir/usr/lib ldd build/AppDir/usr/plugins/platforms/libqxcb.so | grep "not found" || echo "все на месте"
+          echo "--- нет библиотек у Crumb:"; LD_LIBRARY_PATH=build/AppDir/usr/lib/crumb:build/AppDir/usr/lib ldd build/AppDir/usr/lib/crumb/CrumbBrowser | grep "not found" || echo "все на месте"
           xvfb-run -a -s "-screen 0 1440x900x24" bash -c '
             build/AppDir/AppRun https://example.com/ > run.log 2>&1 &
             pid=$!
@@ -99,16 +102,22 @@ jobs:
             kill $pid 2>/dev/null || true
             sleep 3
           '
-          tail -n 80 run.log || true
+          grep -vE "^qt.core.(plugin|library)" run.log | tail -n 80 || true
+          grep -E "Cannot load library|cannot open shared" run.log | head -20 || true
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: crumb-linux
+          name: crumb-linux-check
           path: |
-            build/*.AppImage
             shot.png
             run.log
+          if-no-files-found: warn
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: crumb-linux-appimage
+          path: build/*.AppImage
           if-no-files-found: warn
 
       - name: Приложить к релизу
