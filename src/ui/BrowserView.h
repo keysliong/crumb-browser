@@ -123,6 +123,7 @@ class BrowserView : public QQuickItem {
   std::shared_ptr<ViewLink> link_;
   CefRefPtr<CefBrowser> browser_;
   quintptr hwnd_ = 0;
+  quintptr host_ = 0;   // Linux: промежуточное окно X11 (см. native::childHost)
   bool creating_ = false;
   bool closingByUs_ = false;
   QString favicon_;

@@ -10,3 +10,6 @@ __pycache__/
 *.pyc
 *.mp4
 aqtinstall.log
+
+# Шрифт значков для Linux — собирается в CI (scripts/make-iconfont.py)
+ui/fonts/CrumbIcons.ttf

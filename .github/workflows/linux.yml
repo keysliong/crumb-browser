@@ -77,6 +77,11 @@ jobs:
           mv "third_party/$name" third_party/cef
           rm cef.tar.bz2
 
+      - name: Шрифт значков (Material Symbols → коды Segoe)
+        run: |
+          pip install fonttools brotli
+          python3 scripts/make-iconfont.py ui/fonts/CrumbIcons.ttf build/iconfont
+
       - name: Сборка
         run: |
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \

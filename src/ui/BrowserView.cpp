@@ -36,6 +36,7 @@ BrowserView::~BrowserView() {
     link_->view = nullptr;
   }
   closeBrowser();
+  if (host_) native::destroyHost(host_);
 }
 
 void BrowserView::setInitialUrl(const QString& url) {
@@ -57,8 +58,14 @@ void BrowserView::tryCreate() {
 
   const QRect r = physicalRect();
   CefWindowInfo info;
-  info.SetAsChild((CefWindowHandle)window()->winId(),
-                  CefRect(r.x(), r.y(), std::max(1, r.width()), std::max(1, r.height())));
+  if (native::usesHost()) {
+    // Linux: Chromium — внутри своего окна-хоста, которое уже стоит на месте страницы.
+    if (!host_) host_ = native::childHost(window()->winId(), r, isVisible());
+    info.SetAsChild((CefWindowHandle)host_, CefRect(0, 0, std::max(1, r.width()), std::max(1, r.height())));
+  } else {
+    info.SetAsChild((CefWindowHandle)window()->winId(),
+                    CefRect(r.x(), r.y(), std::max(1, r.width()), std::max(1, r.height())));
+  }
   // Chrome style: полноценный Chromium — расширения, Web Store, менеджер паролей.
   info.runtime_style = CEF_RUNTIME_STYLE_CHROME;
 
@@ -200,7 +207,12 @@ void BrowserView::syncGeometry() {
   const QRect r = physicalRect();
   if (r == lastRect_) return;
   lastRect_ = r;
-  native::moveResize(hwnd_, r);
+  if (host_) {
+    native::moveResize(host_, r);
+    native::moveResize(hwnd_, QRect(0, 0, r.width(), r.height()));
+  } else {
+    native::moveResize(hwnd_, r);
+  }
 #if !defined(_WIN32)
   if (browser_) browser_->GetHost()->WasResized();
 #endif
@@ -208,7 +220,7 @@ void BrowserView::syncGeometry() {
 
 void BrowserView::syncVisibility() {
   if (!hwnd_) return;
-  native::setVisible(hwnd_, isVisible());
+  native::setVisible(host_ ? host_ : hwnd_, isVisible());
   if (browser_) browser_->GetHost()->WasHidden(!isVisible());
 }
 

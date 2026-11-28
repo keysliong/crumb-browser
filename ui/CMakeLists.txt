@@ -27,6 +27,13 @@ qt_add_resources(crumb_ui "crumb_ui_fonts"
   PREFIX "/crumb"
   FILES fonts/RobotoFlex.ttf
 )
+# Шрифт значков для систем без Segoe Fluent Icons (Linux); собирается scripts/make-iconfont.py.
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/fonts/CrumbIcons.ttf")
+  qt_add_resources(crumb_ui "crumb_ui_iconfont"
+    PREFIX "/crumb"
+    FILES fonts/CrumbIcons.ttf
+  )
+endif()
 
 # Иконка Crumb (генерирует цель icons) — для домашней страницы, настроек, установщика.
 set(_icon_png "${CMAKE_SOURCE_DIR}/resources/icons/build/crumb-256.png")

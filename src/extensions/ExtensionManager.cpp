@@ -144,7 +144,7 @@ void ExtensionManager::start(QWindow* window) {
   if (bridge_ || starting_ || !window || !CefRuntime::instance()->ready()) return;
   starting_ = true;
   CefWindowInfo info;
-  info.SetAsChild((CefWindowHandle)window->winId(), CefRect(0, 0, 1, 1));
+  info.SetAsChild((CefWindowHandle)native::childHost(window->winId(), QRect(0, 0, 1, 1), false), CefRect(0, 0, 1, 1));
   info.runtime_style = CEF_RUNTIME_STYLE_CHROME;
   CefBrowserSettings settings;
   CefBrowserHost::CreateBrowser(info, new BridgeClient(), "chrome://extensions/", settings, nullptr, nullptr);

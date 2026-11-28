@@ -625,7 +625,8 @@ void RewindManager::nextWatch() {
     } else if (!watchCreating_) {
       watchCreating_ = true;
       CefWindowInfo info;
-      info.SetAsChild((CefWindowHandle)window_->winId(), CefRect(0, 0, 1280, 800));
+      info.SetAsChild((CefWindowHandle)native::childHost(window_->winId(), QRect(0, 0, 1280, 800), false),
+                      CefRect(0, 0, 1280, 800));
       info.runtime_style = CEF_RUNTIME_STYLE_CHROME;
       CefBrowserSettings settings;
       CefBrowserHost::CreateBrowser(info, new WatchClient(), cs(currentWatchUrl_), settings, nullptr, nullptr);

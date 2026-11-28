@@ -109,9 +109,17 @@ Theme::Theme() {
   f.setHintingPreference(QFont::PreferNoHinting);
   QGuiApplication::setFont(f);
 
-  iconFont_ = QFontDatabase::families().contains(QStringLiteral("Segoe Fluent Icons"))
-                  ? QStringLiteral("Segoe Fluent Icons")
-                  : QStringLiteral("Segoe MDL2 Assets");
+  const QStringList all = QFontDatabase::families();
+  if (all.contains(QStringLiteral("Segoe Fluent Icons"))) {
+    iconFont_ = QStringLiteral("Segoe Fluent Icons");
+  } else if (all.contains(QStringLiteral("Segoe MDL2 Assets"))) {
+    iconFont_ = QStringLiteral("Segoe MDL2 Assets");
+  } else {
+    // Linux и др.: свой шрифт с теми же кодами (scripts/make-iconfont.py, из Material Symbols).
+    const int icons = QFontDatabase::addApplicationFont(QStringLiteral(":/crumb/fonts/CrumbIcons.ttf"));
+    const QStringList f2 = QFontDatabase::applicationFontFamilies(icons);
+    iconFont_ = f2.isEmpty() ? QStringLiteral("Segoe MDL2 Assets") : f2.first();
+  }
 
   anim_ = new QVariantAnimation(this);
   anim_->setStartValue(0.0);

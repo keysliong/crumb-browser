@@ -25,6 +25,9 @@ void setVisible(quintptr h, bool visible) {
 }
 
 void installXErrorHandlers() {}
+quintptr childHost(quintptr qtWindow, const QRect&, bool) { return qtWindow; }
+void destroyHost(quintptr) {}
+bool usesHost() { return false; }
 
 #elif defined(__linux__)
 
@@ -60,11 +63,39 @@ void installXErrorHandlers() {
   XSetIOErrorHandler(onXIoError);
 }
 
+quintptr childHost(quintptr qtWindow, const QRect& r, bool visible) {
+  Display* d = display();
+  if (!d || !qtWindow) return qtWindow;
+  const int screen = DefaultScreen(d);
+  XSetWindowAttributes attrs{};
+  attrs.colormap = DefaultColormap(d, screen);
+  attrs.border_pixel = 0;
+  attrs.background_pixel = 0;
+  const Window w = XCreateWindow(d, static_cast<Window>(qtWindow), r.x(), r.y(), unsigned(std::max(1, r.width())),
+                                 unsigned(std::max(1, r.height())), 0, DefaultDepth(d, screen), InputOutput,
+                                 DefaultVisual(d, screen), CWColormap | CWBorderPixel | CWBackPixel, &attrs);
+  if (visible) XMapWindow(d, w);
+  XSync(d, False);   // окно должно существовать до того, как его увидит Chromium
+  return static_cast<quintptr>(w);
+}
+
+void destroyHost(quintptr host) {
+  Display* d = display();
+  if (!d || !host) return;
+  XDestroyWindow(d, static_cast<Window>(host));
+  XFlush(d);
+}
+
+bool usesHost() { return true; }
+
 #else
 
 void moveResize(quintptr, const QRect&) {}
 void setVisible(quintptr, bool) {}
 void installXErrorHandlers() {}
+quintptr childHost(quintptr qtWindow, const QRect&, bool) { return qtWindow; }
+void destroyHost(quintptr) {}
+bool usesHost() { return false; }
 
 #endif
 
