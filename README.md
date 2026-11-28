@@ -51,11 +51,28 @@
 
 ## Установка
 
+### Windows
+
 1. Скачайте [**Crumb-Setup.exe**](https://github.com/keysliong/crumb-browser/releases/latest/download/Crumb-Setup.exe).
 2. Запустите и нажмите «Установить» — права администратора не нужны.
 3. Готово. Обновление ставится поверх и сохраняет все настройки.
 
 Установщик пока не подписан: если Windows SmartScreen предупредит, нажмите «Подробнее» → «Выполнить в любом случае».
+
+### Linux (CachyOS, Arch, Ubuntu, Fedora…)
+
+Скачайте `Crumb-…-x86_64.AppImage` со [страницы релиза](https://github.com/keysliong/crumb-browser/releases/latest) и запустите:
+
+```bash
+chmod +x Crumb-*-x86_64.AppImage
+./Crumb-*-x86_64.AppImage
+```
+
+При первом запуске Crumb сам добавит ярлык в меню приложений. Работает и на Wayland (через XWayland).
+Нужна свежая система (glibc 2.39+: CachyOS, Arch, Ubuntu 24.04+, Fedora 40+); на Arch-подобных может понадобиться `fuse2`.
+
+На Linux используется официальный CEF без кодеков AAC/H.264: почти всё работает как на Windows,
+но Яндекс Музыка и часть видео (H.264) не воспроизводятся.
 
 ---
 

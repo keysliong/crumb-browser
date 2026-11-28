@@ -49,7 +49,8 @@ ADD_LOGICAL_TARGET("libcef_lib" "${CEF_LIB_RELEASE}" "${CEF_LIB_RELEASE}")
 # _HAS_EXCEPTIONS=0) сюда намеренно не тащим — с Qt они несовместимы.
 function(crumb_use_cef target)
   target_include_directories(${target} PRIVATE "${CEF_ROOT}")
-  target_link_libraries(${target} PRIVATE libcef_lib libcef_dll_wrapper ${CEF_STANDARD_LIBS})
+  # Порядок важен на Linux: статическая обёртка — перед libcef.so, которую она вызывает.
+  target_link_libraries(${target} PRIVATE libcef_dll_wrapper libcef_lib ${CEF_STANDARD_LIBS})
   if(WIN32)
     target_compile_definitions(${target} PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN UNICODE _UNICODE)
     target_link_options(${target} PRIVATE /STACK:0x800000)
