@@ -39,7 +39,7 @@ jobs:
             libxcb-xinput0 libxcb-util1 libxcb-shm0 libxcb-sync1 libxcb-glx0 \
             libnss3 libatk1.0-0t64 libatk-bridge2.0-0t64 libcups2t64 libdrm2 libgbm1 libasound2t64 \
             libxcomposite1 libxdamage1 libxrandr2 libxshmfence1 libpango-1.0-0 libcairo2 \
-            xvfb xauth imagemagick libfuse2t64
+            xvfb xauth imagemagick x11-utils libfuse2t64
 
       - uses: actions/setup-python@v5
         with:
@@ -91,7 +91,7 @@ jobs:
 
       - name: Проверочный запуск (виртуальный экран)
         run: |
-          export CRUMB_DEMO=1 QT_DEBUG_PLUGINS=1
+          export CRUMB_DEMO=1
           echo "--- нет библиотек у модуля xcb:"; LD_LIBRARY_PATH=build/AppDir/usr/lib ldd build/AppDir/usr/plugins/platforms/libqxcb.so | grep "not found" || echo "все на месте"
           echo "--- нет библиотек у Crumb:"; LD_LIBRARY_PATH=build/AppDir/usr/lib/crumb:build/AppDir/usr/lib ldd build/AppDir/usr/lib/crumb/CrumbBrowser | grep "not found" || echo "все на месте"
           xvfb-run -a -s "-screen 0 1440x900x24" bash -c '
@@ -99,11 +99,15 @@ jobs:
             pid=$!
             sleep 35
             import -window root shot.png || true
+            xwininfo -root -tree > windows.txt 2>&1 || true
             kill $pid 2>/dev/null || true
             sleep 3
           '
-          grep -vE "^qt.core.(plugin|library)" run.log | tail -n 80 || true
-          grep -E "Cannot load library|cannot open shared" run.log | head -20 || true
+          tail -n 60 run.log || true
+          echo "--- окна X11:"; grep -vE "has no name|^\s*$" windows.txt | head -60 || true
+          # Журнал CEF из демо-профиля (тестовый режим Qt: ~/.qttest/share/Crumb)
+          find ~ -name crumb_cef.log 2>/dev/null | head -1 | xargs -r -I{} cp {} cef.log
+          echo "--- журнал CEF:"; tail -n 60 cef.log 2>/dev/null || echo "нет"
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -112,6 +116,8 @@ jobs:
           path: |
             shot.png
             run.log
+            windows.txt
+            cef.log
           if-no-files-found: warn
 
       - uses: actions/upload-artifact@v4
