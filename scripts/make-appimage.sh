@@ -35,14 +35,17 @@ done
 # 3. Библиотеки Qt: всё, от чего зависят программа, плагины и QML-модули.
 collect() {
   find "$APPDIR/usr/lib/crumb/CrumbBrowser" "$APPDIR/usr/plugins" "$APPDIR/usr/qml" -type f \( -name '*.so*' -o -name CrumbBrowser \) \
-    -exec env LD_LIBRARY_PATH="$QT_DIR/lib" ldd {} \; 2>/dev/null | grep -oP '=> \K/\S+' \
-    | xargs -r readlink -f | grep "^$(readlink -f "$QT_DIR")/lib/" | sort -u
+    -exec env LD_LIBRARY_PATH="$QT_DIR/lib" ldd {} \; 2>/dev/null | grep -oP '=> \K/\S+' | sort -u \
+    | while read -r p; do
+        # Только библиотеки Qt; копируем под именем из ldd (libQt6Core.so.6), а не под полным.
+        case "$(readlink -f "$p")" in "$(readlink -f "$QT_DIR")"/lib/*) echo "$p";; esac
+      done
 }
-for pass in 1 2; do
-  for lib in $(collect); do cp -an "$lib" "$APPDIR/usr/lib/"; done
+for pass in 1 2 3; do
+  for lib in $(collect); do cp -nL "$lib" "$APPDIR/usr/lib/$(basename "$lib")"; done
 done
 # Qt ищет ICU рядом с собой
-cp -an "$QT_DIR"/lib/libicu*.so* "$APPDIR/usr/lib/" 2>/dev/null || true
+cp -n --preserve=links "$QT_DIR"/lib/libicu*.so* "$APPDIR/usr/lib/" 2>/dev/null || true
 
 # Небольшие системные библиотеки X11/xcb, без которых не запускается Qt (на многих
 # системах их нет по умолчанию: xcb-util-cursor, xcb-util-wm, xkbcommon-x11…).
