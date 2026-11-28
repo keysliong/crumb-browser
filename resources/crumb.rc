@@ -5,8 +5,8 @@
 IDI_ICON1 ICON "icons/build/crumb.ico"
 
 1 VERSIONINFO
-FILEVERSION 0,5,6,0
-PRODUCTVERSION 0,5,6,0
+FILEVERSION 0,6,0,0
+PRODUCTVERSION 0,6,0,0
 BEGIN
   BLOCK "StringFileInfo"
   BEGIN
@@ -15,8 +15,8 @@ BEGIN
       VALUE "CompanyName", "Crumb"
       VALUE "FileDescription", "Crumb — браузер в стиле Material You"
       VALUE "ProductName", "Crumb"
-      VALUE "FileVersion", "0.5.6"
-      VALUE "ProductVersion", "0.5.6"
+      VALUE "FileVersion", "0.6.0"
+      VALUE "ProductVersion", "0.6.0"
       VALUE "LegalCopyright", "Crumb"
     END
   END
