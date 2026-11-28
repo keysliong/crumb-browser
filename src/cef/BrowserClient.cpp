@@ -105,7 +105,7 @@ bool BrowserClient::OnBeforePopup(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>, in
 void BrowserClient::OnAfterCreated(CefRefPtr<CefBrowser> browser) {
   CefRuntime::instance()->browserCreated();
   CefRuntime::instance()->trackBrowser(browser, true);
-  const auto hwnd = reinterpret_cast<quintptr>(browser->GetHost()->GetWindowHandle());
+  const auto hwnd = (quintptr)browser->GetHost()->GetWindowHandle();
   toView([browser, hwnd](BrowserView* v) { v->attachBrowser(browser, hwnd); });
 }
 

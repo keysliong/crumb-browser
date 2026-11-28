@@ -319,7 +319,7 @@ bool RewindManager::handleConsole(CefRefPtr<CefBrowser> browser, const QString& 
   // отладчик выдаёт «управляемый браузер»: капчи Cloudflare Turnstile отказывали
   // (client-error). Скрытая вкладка снимок не даёт — тогда снимок без картинки.
   if (b) {
-    const quintptr hwnd = reinterpret_cast<quintptr>(b->GetHost()->GetWindowHandle());
+    const quintptr hwnd = (quintptr)b->GetHost()->GetWindowHandle();
     QMetaObject::invokeMethod(this, [this, token, hwnd] { captureWindow(token, hwnd); }, Qt::QueuedConnection);
   }
   return true;

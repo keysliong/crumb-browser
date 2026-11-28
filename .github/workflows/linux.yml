@@ -80,7 +80,7 @@ jobs:
         run: |
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_PREFIX_PATH="$HOME/Qt/${QT_VERSION}/gcc_64" -DCEF_ROOT="$PWD/third_party/cef"
-          cmake --build build --target crumb --parallel
+          cmake --build build --target crumb --parallel -- -k 0
           ls -la build/out/Release
 
       - name: AppImage
